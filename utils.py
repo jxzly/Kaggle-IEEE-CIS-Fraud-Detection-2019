@@ -8,6 +8,8 @@ class Conf():
     def __init__(self):
         self.c = 'Kaggle-IEEE-CIS-Fraud-Detection-2019'
         self.root = '/home/daishu/competition/%s/'%self.c
+        self.id_name = 'TransactionID'
+        self.label_name = 'isFraud'
 
 @contextmanager
 def Timer(title):
@@ -93,3 +95,16 @@ def Data_review(trainDf,testDf,idName,labelName):
         info.append([col,data_type,train_nunique,test_nunique,train_test_intersection,train_test_diff,train_mode_or_mean,test_mode_or_mean,train_nan_num,test_nan_num,mi_or_corr])
     info_df = pd.DataFrame(info,columns=['column','dataType','trainNunique','testNunique','ttIntersection','ttDiff','trainModeOrMean','testModeOrMean','trainNanNum','testNanNum','miOrCorr'])
     return info_df
+
+def Count_encoding(df,sparseThreshold):
+    for col in df.columns:
+        df['tmp'] = df[col].map(dict(df[col].value_counts()))
+        df.loc[df['tmp']<sparseThreshold,col] = df.loc[df['tmp']<sparseThreshold,'tmp'].astype(str)
+        df.loc[df['tmp']>=sparseThreshold,col] = df.loc[df['tmp']>=sparseThreshold,'tmp'].astype(str) + '_' + df.loc[df['tmp']>=sparseThreshold,col].astype(str)
+        df[col] = df[col].rank(method='dense')
+    df.drop(['tmp'],axis=1,inplace=True)
+    return df
+
+if __name__ == '__main__':
+    df = pd.DataFrame({'a':['1','2_as','2_as','2_ff','2_ff','2_as','2_ff','1']})
+    print(Count_encoding(df,['a'],3))
