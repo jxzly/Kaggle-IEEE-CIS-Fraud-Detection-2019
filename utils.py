@@ -2,12 +2,13 @@ import datetime
 from contextlib import contextmanager
 import pandas as pd
 import numpy as np
+import os
 from sklearn.metrics import f1_score
 
 class Conf():
     def __init__(self):
         self.c = 'Kaggle-IEEE-CIS-Fraud-Detection-2019'
-        self.root = '/home/daishu/competition/%s/'%self.c
+        self.root = '/'.join(os.path.realpath(__file__).split('/')[:-1])#'F:/home/daishu/competition/%s/'%self.c
         self.id_name = 'TransactionID'
         self.label_name = 'isFraud'
 

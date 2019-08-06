@@ -60,32 +60,36 @@ def Get_nan_features(df):
         df[col] = df[col].astype(str).apply(lambda x:x.replace('.0',''))
     return df
 
-def Get_tran_features(df,prefix):
+def Get_tran_features(df,prefix,resultList):
+    '''
     times = [300,1800]
     for t in times:
         df['tranNumFirst%s'%t] = 0
         df['tranNumLater%s'%t] = 0
         df['tranNumIn%s'%t] = 0
+    '''
     df['lastTranTD'] = 0
     df['nextTranTD'] = 0
+    df['lastTranDist'] = ''
+    df['nextTranDist'] = ''
     with Timer('test1'):
         for c in df[prefix].unique():
             tmp = df.loc[df[prefix]==c]
             tmp['addr1_0'] = np.roll(tmp['addr1'],1)
-            tmp.loc[tmp.index[0],'addr1_0'] = 'nan'
+            tmp.loc[tmp.index[0],'addr1_0'] = '-817119'
             tmp['addr1_1'] = tmp['addr1']
             tmp['addr1_2'] = np.roll(tmp['addr1'],-1)
-            tmp.loc[tmp.index[-1],'addr1_0'] = 'nan'
+            tmp.loc[tmp.index[-1],'addr1_2'] = '-817119'
             tmp['addr2_0'] = np.roll(tmp['addr2'],1)
-            tmp.loc[tmp.index[0],'addr2_0'] = 'nan'
+            tmp.loc[tmp.index[0],'addr2_0'] = '-817119'
             tmp['addr2_1'] = tmp['addr2']
             tmp['addr2_2'] = np.roll(tmp['addr2'],-1)
-            tmp.loc[tmp.index[-1],'addr2_0'] = 'nan'
+            tmp.loc[tmp.index[-1],'addr2_2'] = '-817119'
             diff = tmp['TransactionDT'].diff().fillna(99999999)
             df.loc[tmp.index,'lastTranTD'] = diff
             df.loc[tmp.index,'nextTranTD'] = np.roll(diff,-1)
-            df.loc[tmp.index,'lastTranDist'] = tmp[['addr1_0','addr2_0','addr1_1','addr1_1']].apply(lambda x:'_'.join(x),axis=1)
-            df.loc[tmp.index,'nextTranDist'] = tmp[['addr1_1','addr2_1','addr1_2','addr1_2']].apply(lambda x:'_'.join(x),axis=1)
+            df.loc[tmp.index,'lastTranDist'] = tmp[['addr1_0','addr2_0','addr1_1','addr2_1']].apply(lambda x:'_'.join(x),axis=1)
+            df.loc[tmp.index,'nextTranDist'] = tmp[['addr1_1','addr2_1','addr1_2','addr2_2']].apply(lambda x:'_'.join(x),axis=1)
             '''
             with Timer('test2'):
                 for ind in tmp.index:
@@ -95,25 +99,53 @@ def Get_tran_features(df,prefix):
                         df.loc[ind,'tranNumLater%s'%t] = tmp.loc[(tmp['TransactionDT']>=tran_t)&(tmp['TransactionDT']<=tran_t+t)].shape[0]
                         df.loc[ind,'tranNumIn%s'%t] = tmp.loc[(tmp['TransactionDT']>=tran_t-t//2)&(tmp['TransactionDT']<=tran_t+t//2)].shape[0]
             '''
-    return df
+    resultList.append(df)
+    return None
 
-def Get_card_id_features(df,cardInfo,prefix):
+def Get_card_id_features(df,cardInfo,prefix,nJobs=8):
     #card_info = ['card%s'%(i+1) for i in range(6)]
     #card_info.extend(['TransactionAmt','ProductCD'])
     df[prefix] = df[cardInfo].apply(lambda x:'_'.join(x),axis=1)
-    tran_df = Get_tran_features(df[[prefix,'TransactionDT','addr1','addr2']],prefix).drop([prefix,'TransactionDT','addr1','addr2'],axis=1)
-    tran_df = tran_df.add_prefix(prefix)
+    tmp = df[[prefix]]
+    tmp[prefix] = tmp[prefix].map(dict(tmp[prefix].value_counts()))
+    print(tmp)
+    unique_card = list(df.loc[tmp[prefix]>1,prefix].unique())
+    print(len(unique_card))
+    batch_size = int(np.ceil(len(unique_card)/nJobs))
+    result_list = Manager().list()
+    jobs = []
+    for i in range(nJobs):
+        sub_df = df.loc[df[prefix].isin(unique_card[i*batch_size:(i+1)*batch_size]),[prefix,'TransactionDT','addr1','addr2']]
+        print(sub_df)
+        jobs.append(Process(target=Get_tran_features,args=(sub_df,prefix,result_list,)))
+    for j in jobs:
+        j.start()
+    for j in jobs:
+        j.join()
+    tran_df = pd.concat(result_list).sort_index().drop([prefix,'TransactionDT','addr1','addr2'],axis=1)#Get_tran_features(df[[prefix,'TransactionDT','addr1','addr2']],prefix).drop([prefix,'TransactionDT','addr1','addr2'],axis=1)
+    tran_df = tran_df.add_prefix(prefix+'_')
     df = pd.concat([df,tran_df],axis=1)
+    df.loc[tmp[prefix]==1,prefix+'_lastTranTD'] = 9999999
+    df.loc[tmp[prefix]==1,prefix+'_nextTranTD'] = 9999999
+    df.loc[tmp[prefix]==1,prefix+'_lastTranDist'] = df.loc[tmp[prefix]==1,['addr1','addr2']].apply(lambda x:'-817119_-817119_'+'_'.join(x),axis=1)
+    df.loc[tmp[prefix]==1,prefix+'_nextTranDist'] = df.loc[tmp[prefix]==1,['addr1','addr2']].apply(lambda x:'_'.join(x)+'_-817119_-817119',axis=1)
+    #df['%s_amtDivCount'%prefix] = df['TransactionAmt'].astype(float) / df[prefix].map(dict(df[prefix].value_counts()))
+    #df = Count_encoding(df,[prefix])
+    return df
+
+def Get_tt_card_id_features(df,cardInfo,prefix):
     df['%s_amtDivCount'%prefix] = df['TransactionAmt'].astype(float) / df[prefix].map(dict(df[prefix].value_counts()))
     df = Count_encoding(df,[prefix])
     return df
 
-train_df,test_df = Get_train_test(nrows=100)
+train_df,test_df = Get_train_test(nrows=10000)
 train_nrows = train_df.shape[0]
+train_df = Get_nan_features(train_df)
+test_df = Get_nan_features(test_df)
+train_df = Get_card_id_features(train_df,card_cols,'uniqueCrad0')
+test_df = Get_card_id_features(test_df,card_cols,'uniqueCrad0')
 tt_df = train_df.append(test_df).reset_index(drop=True)
-del train_df,test_df
-tt_df = Get_nan_features(tt_df)
-tt_df = Get_card_id_features(tt_df,card_cols,'uniqueCrad0')
+tt_df = Get_tt_card_id_features(tt_df,card_cols,'uniqueCrad0')
 print(tt_df.head())
 tt_df[:train_nrows].to_csv('%s/data/new_train.csv'%root,index=False)
 tt_df[train_nrows:].to_csv('%s/data/new_test.csv'%root,index=False)
