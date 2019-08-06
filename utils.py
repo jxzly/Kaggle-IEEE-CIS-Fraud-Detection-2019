@@ -96,9 +96,9 @@ def Data_review(trainDf,testDf,idName,labelName):
     info_df = pd.DataFrame(info,columns=['column','dataType','trainNunique','testNunique','ttIntersection','ttDiff','trainModeOrMean','testModeOrMean','trainNanNum','testNanNum','miOrCorr'])
     return info_df
 
-def Count_encoding(df,sparseThreshold):
-    for col in df.columns:
-        df['tmp'] = df[col].map(dict(df[col].value_counts()))
+def Count_encoding(df,cols,sparseThreshold=100):
+    for col in cols:
+        df['tmp'] = df[col].map(dict(df[col].value_counts())).astype(int)
         df.loc[df['tmp']<sparseThreshold,col] = df.loc[df['tmp']<sparseThreshold,'tmp'].astype(str)
         df.loc[df['tmp']>=sparseThreshold,col] = df.loc[df['tmp']>=sparseThreshold,'tmp'].astype(str) + '_' + df.loc[df['tmp']>=sparseThreshold,col].astype(str)
         df[col] = df[col].rank(method='dense')
