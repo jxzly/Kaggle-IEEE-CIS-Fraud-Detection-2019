@@ -76,31 +76,31 @@ def Mutual_information(x,y):
 
 def Data_review(trainDf,testDf,idName,labelName):
     info = []
-    info.append([idName,'object',trainDf.shape[0],testDf.shape[0],np.nan,np.nan,np.nan,np.nan,np.nan,np.nan,np.nan])
-    info.append([labelName,trainDf[labelName].dtype,trainDf.shape[0],testDf.shape[0],np.nan,trainDf[labelName].mean(),np.nan,np.nan,np.nan,np.nan,np.nan])
-    for col in trainDf.columns:
+    info.append([idName,'object',trainDf.shape[0],testDf.shape[0],0,'0.00%',np.nan,np.nan,np.nan,np.nan,np.nan])
+    info.append([labelName,trainDf[labelName].dtype,trainDf.shape[0],testDf.shape[0],np.nan,np.nan,trainDf[labelName].mean(),np.nan,np.nan,np.nan,np.nan])
+    for col in tqdm(trainDf.columns):
         if col in [idName,labelName]:
             continue
         data_type = trainDf[col].dtype
-        train_nunique = trainDf[col].nunique()
-        test_nunique = testDf[col].nunique()
-        train_test_intersection = len(set(trainDf[col])&set(testDf[col]))
-        train_test_diff = len(set(testDf[col])-set(trainDf[col]))
+        train_nunique = trainDf[col].fillna('-999').nunique()
+        test_nunique = testDf[col].fillna('-999').nunique()
+        train_test_intersection = len(set(trainDf[col].unique())&(set(testDf[col].unique())))
+        intersectiom_pct = '%.2f%%'%(train_test_intersection/train_nunique*100)
         if data_type == 'object':
-            train_mode_or_mean = trainDf[col].mode()
-            test_mode_or_mean = trainDf[col].mode()
+            train_mode_or_mean = trainDf[col].mode().values[0]
+            test_mode_or_mean = testDf[col].mode().values[0]
             mi_or_corr = Mutual_information(trainDf[col],trainDf[labelName])
         else:
             train_mode_or_mean = trainDf[col].mean()
-            test_mode_or_mean = trainDf[col].mean()
+            test_mode_or_mean = testDf[col].mean()
             mi_or_corr = trainDf[col].corr(trainDf[labelName])
         train_nan_num = trainDf[col].isnull().sum()
         test_nan_num = testDf[col].isnull().sum()
-        info.append([col,data_type,train_nunique,test_nunique,train_test_intersection,train_test_diff,train_mode_or_mean,test_mode_or_mean,train_nan_num,test_nan_num,mi_or_corr])
-    info_df = pd.DataFrame(info,columns=['column','dataType','trainNunique','testNunique','ttIntersection','ttDiff','trainModeOrMean','testModeOrMean','trainNanNum','testNanNum','miOrCorr'])
+        info.append([col,data_type,train_nunique,test_nunique,train_test_intersection,intersectiom_pct,train_mode_or_mean,test_mode_or_mean,train_nan_num,test_nan_num,mi_or_corr])
+    info_df = pd.DataFrame(info,columns=['column','dataType','trainNunique','testNunique','trainTestIntersection','intersectionPct','trainModeOrMean','testModeOrMean','trainNanNum','testNanNum','miOrCorr'])
     return info_df
 
-def Count_encoding(df,cols,sparseThreshold=100):
+def Count_encoding(df,cols,sparseThreshold=50):
     for col in cols:
         df['tmp'] = df[col].map(dict(df[col].value_counts())).astype(int)
         df.loc[df['tmp']<sparseThreshold,col] = df.loc[df['tmp']<sparseThreshold,'tmp'].astype(str)

@@ -54,6 +54,7 @@ def Get_nan_features(df):
         else:
             if df[col].dtype == 'object':
                 df[col] = df[col].fillna('-999')
+                df[col] = df[col].apply(lambda x:x.lower())
             else:
                 df[col] = df[col].fillna(-999)
     cat_cols = ['card%s'%(i+1) for i in range(6)]
@@ -145,6 +146,32 @@ def Get_t_features(df):
     df.drop(['TransactionDT'],axis=1,inplace=True)
     return df
 
+def Get_id_features(df):
+    df['notFountNum'] = (df[['id_12','id_15','id_16','id_27','id_28','id_29']]=='notfound').sum(axis=1)
+    def Get_os(x):
+        os_list = ['windows','ios','mac','linux','android','func']
+        for o in os_list:
+            if o in x:
+                return o
+                return x
+    df['os'] = train_df['id_30'].apply(lambda x:Get_os(x))
+    def Get_chrome(x):
+        if re.match('chrome *.* for android',x):
+            return 'chrome for android'
+        os_list = ['opera','samsung','android','chrome','safari','mobile safari','firefox','edge','google','ie']
+        for o in os_list:
+            if o in x:
+                return o
+        return x
+    df['chrome'] = train_df['id_31'].apply(lambda x:Get_chrome(x))
+    df['w'] = df['id_33'].apply(lambda x:x.split('x')[0] if 'x' in x else x).astype(int)
+    df['h'] = df['id_33'].apply(lambda x:x.split('x')[1] if 'x' in x else x).astype(int)
+    df['w-h'] = df['w'] - df['h']
+    df['area'] = df['w'] * df['h']
+    df['ratio'] = df['w'] / df['h']
+    df['TF']=df[['id_35','id_36','id_37','id_38']].sum(axis=1)
+    return df
+
 train_df,test_df = Get_train_test(nrows=None)
 train_nrows = train_df.shape[0]
 train_df = Get_nan_features(train_df)
@@ -155,7 +182,7 @@ tt_df = train_df.append(test_df).reset_index(drop=True)
 del train_df,test_df
 tt_df = Get_tt_card_id_features(tt_df,card_cols,'uniqueCrad0')
 tt_df = Get_t_features(tt_df)
-tt_df = Count_encoding(tt_df,card_cols+email_cols+m_cols+id_cols+device_cols+['ProductCD'])
+tt_df = Count_encoding(tt_df,card_cols+email_cols+m_cols+id_cols+device_cols+['ProductCD','w','h','w-h','area','ratio','TF'])
 print(tt_df.head())
 tt_df[:train_nrows].to_csv('%s/data/new_train.csv'%root,index=False)
 tt_df[train_nrows:].to_csv('%s/data/new_test.csv'%root,index=False)
