@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import pandas as pd
 import numpy as np
 import os
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score,roc_auc_score
 
 class Conf():
     def __init__(self):
@@ -19,6 +19,9 @@ def Timer(title):
     yield
     print("%s - done in %is"%(title, (datetime.datetime.now() - t0).seconds))
     return None
+
+def AUC(target,pre):
+    return roc_auc_score(target,pre)
 
 def Lgb_f1_score(preds, data):
     labels = data.get_label()
