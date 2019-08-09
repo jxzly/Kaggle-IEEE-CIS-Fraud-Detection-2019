@@ -102,6 +102,7 @@ def Data_review(trainDf,testDf,idName,labelName):
 
 def Count_encoding(df,cols,sparseThreshold=50):
     for col in cols:
+        print(col)
         df['tmp'] = df[col].map(dict(df[col].value_counts())).astype(int)
         df.loc[df['tmp']<sparseThreshold,col] = df.loc[df['tmp']<sparseThreshold,'tmp'].astype(str)
         df.loc[df['tmp']>=sparseThreshold,col] = df.loc[df['tmp']>=sparseThreshold,'tmp'].astype(str) + '_' + df.loc[df['tmp']>=sparseThreshold,col].astype(str)

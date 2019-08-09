@@ -4,7 +4,7 @@ from sklearn.feature_selection import chi2, SelectPercentile
 from sklearn.preprocessing import OneHotEncoder
 from scipy import sparse
 import datetime
-import os,sys
+import os,sys,re
 from multiprocessing import Process,Manager
 from tqdm import tqdm
 from utils import *
@@ -18,6 +18,7 @@ root = conf.root
 id_name = conf.id_name
 label_name = conf.label_name
 card_cols = ['card%s'%(i+1) for i in range(6)]
+addr_cols = ['addr1','addr2']
 email_cols = ['P_emaildomain','R_emaildomain']
 c_cols = ['C%s'%(i+1) for i in range(14)]
 d_cols = ['D%s'%(i+1) for i in range(15)]
@@ -135,8 +136,9 @@ def Get_card_id_features(df,cardInfo,prefix,nJobs=8):
     #df = Count_encoding(df,[prefix])
     return df
 
-def Get_tt_card_id_features(df,cardInfo,prefix):
-    df['%s_amtDivCount'%prefix] = df['TransactionAmt'].astype(float) / df[prefix].map(dict(df[prefix].value_counts()))
+def Get_tt_card_id_features(df,prefix):
+    df['%s_num'%prefix] = df[prefix].map(dict(df[prefix].value_counts()))
+    df['%s_amtDivCount'%prefix] = df['TransactionAmt'].astype(float) / df['%s_num'%prefix]
     df = Count_encoding(df,[prefix,prefix+'_lastTranDist',prefix+'_nextTranDist'])
     return df
 
@@ -153,8 +155,8 @@ def Get_id_features(df):
         for o in os_list:
             if o in x:
                 return o
-                return x
-    df['os'] = train_df['id_30'].apply(lambda x:Get_os(x))
+        return x
+    df['os'] = df['id_30'].apply(lambda x:Get_os(x))
     def Get_chrome(x):
         if re.match('chrome *.* for android',x):
             return 'chrome for android'
@@ -163,13 +165,39 @@ def Get_id_features(df):
             if o in x:
                 return o
         return x
-    df['chrome'] = train_df['id_31'].apply(lambda x:Get_chrome(x))
+    df['chrome'] = df['id_31'].apply(lambda x:Get_chrome(x))
     df['w'] = df['id_33'].apply(lambda x:x.split('x')[0] if 'x' in x else x).astype(int)
     df['h'] = df['id_33'].apply(lambda x:x.split('x')[1] if 'x' in x else x).astype(int)
     df['w-h'] = df['w'] - df['h']
     df['area'] = df['w'] * df['h']
-    df['ratio'] = df['w'] / df['h']
-    df['TF']=df[['id_35','id_36','id_37','id_38']].sum(axis=1)
+    df['ratio'] = df['w'] / (1.0+df['h'])
+    return df
+
+def Get_agg_features(df):
+    df['TF'] = df[['id_35','id_36','id_37','id_38']].sum(axis=1)
+    df['M1-M9'] = df[['M%s'%i for i in range(1,10)]].sum(axis=1)
+    df['nan-12-3'] = df[['V279','V280','V284','V285','V286','V287','V290','V291','V292','V293','V294','V295','V297','V298','V299','V302','V303','V304','V305','V306','V307','V308','V309','V310','V311','V312','V316','V317','V318','V319','V320','V321']].sum(axis=1)
+    df['nan-134-0'] = df[['V95','V96','V97','V98','V99','V100','V101','V102','V103','V104','V105','V106','V107','V108','V109','V110','V111','V112','V113','V114','V115','V116','V117','V118','V119','V120','V121','V122','V123','V124','V125','V126','V127','V128','V129','V130','V131','V132','V133','V134','V135','V136','V137',]].sum(axis=1)
+    df['nan-1269-6031'] = df[['D1','V281','V282','V283','V288','V289','V296','V300','V301','V313','V314','V315']].sum(axis=1)
+    df['nan-77096-12899'] = df[['V12','V13','V14','V15','V16','V17','V18','V19','V20','V21','V22','V23','V24','V25','V26','V27','V28','V29','V30','V31','V32','V33','V34','V53','V54','V55','V56','V57','V58','V59','V60','V61','V62','V63','V64','V65','V66','V67','V68','V69','V70','V71','V72','V73','V74']].sum(axis=1)
+    df['nan-89164-12081'] = df[['V75','V76','V77','V78','V79','V80','V81','V82','V83','V84','V85','V86','V87','V88','V89','V90','V91','V92','V93','V94']].sum(axis=1)
+    df['nan-168922-76851'] = df[['V35','V36','V37','V38','V39','V40','V41','V42','V43','V44','V45','V46','V47','V48','V49','V50','V51','V52']].sum(axis=1)
+    df['nan-279287-176518'] = df[['D11','V1','V2','V3','V4','V5','V6','V7','V8','V9','V10','V11','D2']].sum(axis=1)
+    df['nan-271100-176639'] = df[['M1','M2','M3']].sum(axis=1)
+    df['nan-346252-235004'] = df[['M8','M9']].sum(axis=1)
+    df['nan-446307-364784'] = df['id_01'].astype(str) + df['id_12']
+    df['nan-449121-369375'] = df[['V220','V221','V222','V227','V234','V238','V239','V245','V250','V251','V255','V256','V259','V270','V271','V272']].sum(axis=1)
+    df['nan-449555-369714'] = df[['id_15','id_35','id_36','id_37','id_38']].sum(axis=1)
+    df['nan-449562-369913'] = df['id_11'].astype(str) + df[['id_28','id_29']].sum(axis=1)
+    df['nan-450721-370316'] = df[['V169','V170','V171','V174','V175','V180','V184','V185','V188','V189','V194','V195','V197','V198','V200','V201','V208','V209','V210']].sum(axis=1)
+    df['nan-450909-369957'] = df[['V167','V168','V172','V173','V176','V177','V178','V179','V181','V182','V183','V186','V187','V190','V191','V192','V193','V196','V199','V202','V203','V204','V205','V206','V207','V211','V212','V213','V214','V215','V216']].sum(axis=1)
+    df['nan-453675-371941'] = df[['id_05','id_06']].sum(axis=1)
+    df['nan-508589-430636'] = df[['V217','V218','V219','V223','V224','V225','V226','V228','V229','V230','V231','V232','V233','V235','V236','V237','V240','V241','V242','V243','V244','V246','V247','V248','V249','V252','V253','V254','V257','V258','V260','V261','V262','V263','V264','V265','V266','V267','V268','V269','V273','V274','V275','V276','V277','V278','id_16','id_13','DeviceInfo','V322','V323','V324','V325','V326','V327','V328','V329','V330','V331','V332','V333','V334','V335','V336','V337','V338','V339','V143','V144','V145','V150','V151','V152','V159','V160','V164','V165','V166']].sum(axis=1)
+    df['nan-508595-430906'] = df[['V138','V139','V140','V141','V142','V146','V147','V148','V149','V153','V154','V155','V156','V157','V158','V161','V162','V163']].sum(axis=1)
+    df['nan-515614-432353'] = df[['D8','D9','id_09','id_10']].sum(axis=1)
+    df['nan-524216-440210'] = df[['id_03','id_14']].sum(axis=1)
+    df['nan-585371-501629'] = df['id_22'].astype(str) + df[['id_23','id_27']].sum(axis=1)
+    df['nan-585385-501632'] = df[['id_07','id_08']].sum(axis=1)
     return df
 
 train_df,test_df = Get_train_test(nrows=None)
@@ -178,11 +206,17 @@ train_df = Get_nan_features(train_df)
 test_df = Get_nan_features(test_df)
 train_df = Get_card_id_features(train_df,card_cols,'uniqueCrad0')
 test_df = Get_card_id_features(test_df,card_cols,'uniqueCrad0')
+train_df = Get_card_id_features(train_df,card_cols+addr_cols,'uniqueCrad1')
+test_df = Get_card_id_features(test_df,card_cols+addr_cols,'uniqueCrad1')
 tt_df = train_df.append(test_df).reset_index(drop=True)
 del train_df,test_df
-tt_df = Get_tt_card_id_features(tt_df,card_cols,'uniqueCrad0')
+tt_df = Get_tt_card_id_features(tt_df,'uniqueCrad0')
+tt_df = Get_tt_card_id_features(tt_df,'uniqueCrad1')
 tt_df = Get_t_features(tt_df)
-tt_df = Count_encoding(tt_df,card_cols+email_cols+m_cols+id_cols+device_cols+['ProductCD','w','h','w-h','area','ratio','TF'])
+tt_df = Get_id_features(tt_df)
+tt_df = Get_agg_features(tt_df)
+tt_df = Count_encoding(tt_df,card_cols+email_cols+m_cols+id_cols+device_cols+['ProductCD','os','chrome','w','h','w-h','area','ratio','TF',\
+        'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-449562-369913','nan-585371-501629'])
 print(tt_df.head())
 tt_df[:train_nrows].to_csv('%s/data/new_train.csv'%root,index=False)
 tt_df[train_nrows:].to_csv('%s/data/new_test.csv'%root,index=False)
