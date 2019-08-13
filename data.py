@@ -56,10 +56,10 @@ def Get_nan_features(df):
             if df[col].dtype == 'object':
                 df[col] = df[col].fillna('-999')
                 df[col] = df[col].apply(lambda x:x.lower())
-            else:
-                df[col] = df[col].fillna(-999)
+            #else:
+            #    df[col] = df[col].fillna(-999)
     cat_cols = ['card%s'%(i+1) for i in range(6)]
-    cat_cols.extend(['TransactionAmt','ProductCD','addr1','addr2'])
+    cat_cols.extend(['ProductCD','addr1','addr2'])
     for col in cat_cols:
         df[col] = df[col].astype(str).apply(lambda x:x.replace('.0',''))
     return df
@@ -132,14 +132,21 @@ def Get_card_id_features(df,cardInfo,prefix,nJobs=8):
     df.loc[tmp[prefix]==1,prefix+'_nextTranTD'] = 9999999
     df.loc[tmp[prefix]==1,prefix+'_lastTranDist'] = df.loc[tmp[prefix]==1,['addr1','addr2']].apply(lambda x:'-999_-999_'+'_'.join(x),axis=1)
     df.loc[tmp[prefix]==1,prefix+'_nextTranDist'] = df.loc[tmp[prefix]==1,['addr1','addr2']].apply(lambda x:'_'.join(x)+'_-999_-999',axis=1)
+    df.drop([prefix],axis=1,inplace=True)
     #df['%s_amtDivCount'%prefix] = df['TransactionAmt'].astype(float) / df[prefix].map(dict(df[prefix].value_counts()))
     #df = Count_encoding(df,[prefix])
     return df
 
-def Get_tt_card_id_features(df,prefix):
-    df['%s_num'%prefix] = df[prefix].map(dict(df[prefix].value_counts()))
-    df['%s_amtDivCount'%prefix] = df['TransactionAmt'].astype(float) / df['%s_num'%prefix]
-    df = Count_encoding(df,[prefix,prefix+'_lastTranDist',prefix+'_nextTranDist'])
+def Get_tt_card_id_features(df,cardInfo,prefix):
+    if len(cardInfo) > 1:
+        df[prefix] = df[cardInfo].apply(lambda x:'_'.join(x),axis=1)
+    for col in ['TransactionAmt','id_02','D15']:
+        print(df[col])
+        df['%s_%sDivCount'%(prefix,col)] = df[col].astype(float) / df[prefix].map(dict(df[prefix].value_counts()))
+        df['%s_%sDivMean'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('mean')
+        df['%s_%sDivstd'%(prefix,col)] = df[col].astype(float) / (df[[col,prefix]].groupby([prefix])[col].transform('std')+0.001)
+    if len(cardInfo) > 1:
+        df = Count_encoding(df,[prefix])#[prefix,prefix+'_lastTranDist',prefix+'_nextTranDist']
     return df
 
 def Get_t_features(df):
@@ -210,8 +217,14 @@ train_df = Get_card_id_features(train_df,card_cols+addr_cols,'uniqueCrad1')
 test_df = Get_card_id_features(test_df,card_cols+addr_cols,'uniqueCrad1')
 tt_df = train_df.append(test_df).reset_index(drop=True)
 del train_df,test_df
-tt_df = Get_tt_card_id_features(tt_df,'uniqueCrad0')
-tt_df = Get_tt_card_id_features(tt_df,'uniqueCrad1')
+tt_df = Get_tt_card_id_features(tt_df,['card1'],'card1')
+tt_df = Get_tt_card_id_features(tt_df,['card4'],'card4')
+tt_df = Get_tt_card_id_features(tt_df,card_cols,'uniqueCrad0')
+tt_df = Get_tt_card_id_features(tt_df,card_cols+addr_cols,'uniqueCrad1')
+tt_df = Get_tt_card_id_features(tt_df,card_cols+email_cols,'uniqueCrad2')
+for col in tt_df:
+    if tt_df[col].dtype != 'object':
+        tt_df[col] = tt_df[col].fillna(-999)
 tt_df = Get_t_features(tt_df)
 tt_df = Get_id_features(tt_df)
 tt_df = Get_agg_features(tt_df)

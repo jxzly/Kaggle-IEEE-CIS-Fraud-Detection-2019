@@ -15,7 +15,7 @@ label_name = conf.label_name
 def Lgb_folds_pred(nSplits=5,catFeatures=[],swapTargetFrac=0.0,seed=42):
     import lgb
     random_state= seed
-    lgb_params = {
+    lgb_params1 = {
                   'objective' : 'binary',
                   'metric' : 'auc',
                   'boosting': 'gbdt',
@@ -35,6 +35,22 @@ def Lgb_folds_pred(nSplits=5,catFeatures=[],swapTargetFrac=0.0,seed=42):
                   'verbosity' : 1,
                   'seed': random_state
     }
+    lgb_params = {'num_leaves': 491,
+          'min_child_weight': 0.03454472573214212,
+          'feature_fraction': 0.3797454081646243,
+          'bagging_fraction': 0.4181193142567742,
+          'min_data_in_leaf': 106,
+          'objective': 'binary',
+          'max_depth': -1,
+          'learning_rate': 0.006883242363721497,
+          "boosting_type": "gbdt",
+          "bagging_seed": 11,
+          "metric": 'auc',
+          "verbosity": -1,
+          'reg_alpha': 0.3899927210061127,
+          'reg_lambda': 0.6485237330340494,
+          'random_state': 47
+         }
     model = lgb.Model(params=lgb_params,rounds=4000,earlyStoppingRounds=200,verbose=100,nSplits=nSplits,swapTargetFrac=swapTargetFrac,seed=seed)
     model.Train(trainDf=train_df,testDf=test_df,catFeatures=catFeatures,prefix='')
     return None
@@ -63,5 +79,11 @@ def Cab_folds_pred(nSplits=5,catFeatures=[],swapTargetFrac=0.0,seed=42):
 
 train_df = pd.read_csv('%s/data/new_train.csv'%root,nrows=None)
 test_df = pd.read_csv('%s/data/new_test.csv'%root,nrows=None)
+tt_df = train_df.append(test_df)
+cols = [col for col in tt_df.columns if 'TranDist' in col]
+tt_df = Count_encoding(tt_df,cols)
+train_df = tt_df[:train_df.shape[0]]
+test_df = tt_df[train_df.shape[0]:]
+del tt_df
 Lgb_folds_pred()
 #Cab_folds_pred(catFeatures=cat_cols)
