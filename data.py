@@ -26,7 +26,7 @@ m_cols = ['M%s'%(i+1) for i in range(9)]
 v_cols = ['V%s'%(i+1) for i in range(339)]
 id_cols = ['id_%s'%str(i+1).zfill(2) for i in range(38)]
 device_cols = ['DeviceType','DeviceInfo']
-
+cat_cols = card_cols+['ProductCD','addr1','addr2']+email_cols+m_cols+['id_%s'%str(i+1).zfill(2) for i in range(11,38)]+device_cols
 np.random.seed(2019)
 
 def Get_train_test(nrows=None):
@@ -53,7 +53,7 @@ def Get_nan_features(df):
         if col in [id_name,label_name]:
             continue
         else:
-            if df[col].dtype == 'object':
+            if col in cat_cols:
                 df[col] = df[col].fillna('-999')
                 df[col] = df[col].apply(lambda x:x.lower())
             #else:
@@ -228,8 +228,9 @@ for col in tt_df:
 tt_df = Get_t_features(tt_df)
 tt_df = Get_id_features(tt_df)
 tt_df = Get_agg_features(tt_df)
-tt_df = Count_encoding(tt_df,card_cols+email_cols+m_cols+id_cols+device_cols+['ProductCD','os','chrome','w','h','w-h','area','ratio','TF',\
-        'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-449562-369913','nan-585371-501629'])
+cat_cols = cat_cols+['os','chrome','w','h','w-h','area','ratio','TF',\
+        'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-449562-369913','nan-585371-501629']
+tt_df = Count_encoding(tt_df,cat_cols)
 print(tt_df.head())
 tt_df[:train_nrows].to_csv('%s/data/new_train.csv'%root,index=False)
 tt_df[train_nrows:].to_csv('%s/data/new_test.csv'%root,index=False)
