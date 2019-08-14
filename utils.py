@@ -8,7 +8,7 @@ from sklearn.metrics import f1_score,roc_auc_score
 class Conf():
     def __init__(self):
         self.c = 'Kaggle-IEEE-CIS-Fraud-Detection-2019'
-        self.root = '/'.join(os.path.realpath(__file__).split('/')[:-1])#'F:/home/daishu/competition/%s/'%self.c
+        self.root = 'F:/home/daishu/competition/%s/'%self.c#'/'.join(os.path.realpath(__file__).split('/')[:-1])#
         self.id_name = 'TransactionID'
         self.label_name = 'isFraud'
 

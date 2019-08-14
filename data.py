@@ -50,18 +50,11 @@ def Get_nan_features(df):
     df['idNanNum'] = df[id_cols].isna().sum(axis=1)
     df['deviceNanNum'] = df[device_cols].isna().sum(axis=1)
     for col in df.columns:
-        if col in [id_name,label_name]:
-            continue
-        else:
-            if col in cat_cols:
-                df[col] = df[col].fillna('-999')
-                df[col] = df[col].apply(lambda x:x.lower())
-            #else:
-            #    df[col] = df[col].fillna(-999)
-    cat_cols = ['card%s'%(i+1) for i in range(6)]
-    cat_cols.extend(['ProductCD','addr1','addr2'])
-    for col in cat_cols:
-        df[col] = df[col].astype(str).apply(lambda x:x.replace('.0',''))
+        if col in cat_cols:
+            df[col] = df[col].fillna('-999').astype(str)
+            df[col] = df[col].apply(lambda x:x.lower())
+    for col in card_cols+addr_cols:
+        df[col] = df[col].apply(lambda x:x.replace('.0',''))
     return df
 
 def Get_tran_features(df,prefix,resultList):
@@ -137,10 +130,10 @@ def Get_card_id_features(df,cardInfo,prefix,nJobs=8):
     #df = Count_encoding(df,[prefix])
     return df
 
-def Get_tt_card_id_features(df,cardInfo,prefix):
+def Get_tt_group_features(df,cardInfo,prefix):
     if len(cardInfo) > 1:
         df[prefix] = df[cardInfo].apply(lambda x:'_'.join(x),axis=1)
-    for col in ['TransactionAmt','id_02','D15']:
+    for col in ['TransactionAmt','TransactionAmtDecimal','id_02','C1','C8','C11','C13','C14','D2','D15','V201','V257','V258','V294','V317']:
         print(df[col])
         df['%s_%sDivCount'%(prefix,col)] = df[col].astype(float) / df[prefix].map(dict(df[prefix].value_counts()))
         df['%s_%sDivMean'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('mean')
@@ -150,6 +143,8 @@ def Get_tt_card_id_features(df,cardInfo,prefix):
     return df
 
 def Get_t_features(df):
+    df['TransactionAmtDecimal'] = df['TransactionAmt'].apply(lambda x:1000*(x-x//1))
+    df['day'] = np.floor(df['TransactionDT']/(3600*24))
     df['dayOfWeek'] = np.floor(df['TransactionDT']/(3600*24)) % 7
     df['hour'] = hours = np.floor(df['TransactionDT']/3600) % 24
     df.drop(['TransactionDT'],axis=1,inplace=True)
@@ -203,11 +198,11 @@ def Get_agg_features(df):
     df['nan-508595-430906'] = df[['V138','V139','V140','V141','V142','V146','V147','V148','V149','V153','V154','V155','V156','V157','V158','V161','V162','V163']].sum(axis=1)
     df['nan-515614-432353'] = df[['D8','D9','id_09','id_10']].sum(axis=1)
     df['nan-524216-440210'] = df[['id_03','id_14']].sum(axis=1)
-    df['nan-585371-501629'] = df['id_22'].astype(str) + df[['id_23','id_27']].sum(axis=1)
+    df['nan-585371-501629'] = df[['id_22','id_23','id_27']].sum(axis=1)
     df['nan-585385-501632'] = df[['id_07','id_08']].sum(axis=1)
     return df
 
-train_df,test_df = Get_train_test(nrows=None)
+train_df,test_df = Get_train_test(nrows=100)
 train_nrows = train_df.shape[0]
 train_df = Get_nan_features(train_df)
 test_df = Get_nan_features(test_df)
@@ -217,20 +212,22 @@ train_df = Get_card_id_features(train_df,card_cols+addr_cols,'uniqueCrad1')
 test_df = Get_card_id_features(test_df,card_cols+addr_cols,'uniqueCrad1')
 tt_df = train_df.append(test_df).reset_index(drop=True)
 del train_df,test_df
-tt_df = Get_tt_card_id_features(tt_df,['card1'],'card1')
-tt_df = Get_tt_card_id_features(tt_df,['card4'],'card4')
-tt_df = Get_tt_card_id_features(tt_df,card_cols,'uniqueCrad0')
-tt_df = Get_tt_card_id_features(tt_df,card_cols+addr_cols,'uniqueCrad1')
-tt_df = Get_tt_card_id_features(tt_df,card_cols+email_cols,'uniqueCrad2')
+tt_df = Get_new_features(tt_df)
+tt_df = Get_tt_group_features(tt_df,['day'],'day')
+tt_df = Get_tt_group_features(tt_df,['card1'],'card1')
+tt_df = Get_tt_group_features(tt_df,['card4'],'card4')
+tt_df = Get_tt_group_features(tt_df,card_cols,'uniqueCrad0')
+tt_df = Get_tt_group_features(tt_df,card_cols+addr_cols,'uniqueCrad1')
+tt_df = Get_tt_group_features(tt_df,card_cols+email_cols,'uniqueCrad2')
+tt_df = Get_id_features(tt_df)
+tt_df = Get_agg_features(tt_df)
 for col in tt_df:
     if tt_df[col].dtype != 'object':
         tt_df[col] = tt_df[col].fillna(-999)
-tt_df = Get_t_features(tt_df)
-tt_df = Get_id_features(tt_df)
-tt_df = Get_agg_features(tt_df)
 cat_cols = cat_cols+['os','chrome','w','h','w-h','area','ratio','TF',\
         'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-449562-369913','nan-585371-501629']
 tt_df = Count_encoding(tt_df,cat_cols)
+tt_df['day'] = tt_df['day'].map(dict(tt_df['day'].value_counts()))
 print(tt_df.head())
 tt_df[:train_nrows].to_csv('%s/data/new_train.csv'%root,index=False)
 tt_df[train_nrows:].to_csv('%s/data/new_test.csv'%root,index=False)
