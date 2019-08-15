@@ -11,6 +11,7 @@ class Conf():
         self.root = '/'.join(os.path.realpath(__file__).split('/')[:-1])#'F:/home/daishu/competition/%s/'%self.c#
         self.id_name = 'TransactionID'
         self.label_name = 'isFraud'
+        self.random_state = 47
 
 @contextmanager
 def Timer(title):
@@ -20,8 +21,8 @@ def Timer(title):
     print("%s - done in %is"%(title, (datetime.datetime.now() - t0).seconds))
     return None
 
-def AUC(target,pre):
-    return roc_auc_score(target,pre)
+def Metric(target,pred):
+    return Metric(target,pred)
 
 def Lgb_f1_score(preds, data):
     labels = data.get_label()
