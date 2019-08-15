@@ -142,7 +142,7 @@ def Get_tt_group_features(df,cardInfo,prefix):
         df = Count_encoding(df,[prefix])#[prefix,prefix+'_lastTranDist',prefix+'_nextTranDist']
     return df
 
-def Get_t_features(df):
+def Get_new_features(df):
     df['TransactionAmtDecimal'] = df['TransactionAmt'].apply(lambda x:1000*(x-x//1))
     df['day'] = np.floor(df['TransactionDT']/(3600*24))
     df['dayOfWeek'] = np.floor(df['TransactionDT']/(3600*24)) % 7
@@ -202,7 +202,7 @@ def Get_agg_features(df):
     df['nan-585385-501632'] = df[['id_07','id_08']].sum(axis=1)
     return df
 
-train_df,test_df = Get_train_test(nrows=100)
+train_df,test_df = Get_train_test(nrows=None)
 train_nrows = train_df.shape[0]
 train_df = Get_nan_features(train_df)
 test_df = Get_nan_features(test_df)
@@ -210,6 +210,10 @@ train_df = Get_card_id_features(train_df,card_cols,'uniqueCrad0')
 test_df = Get_card_id_features(test_df,card_cols,'uniqueCrad0')
 train_df = Get_card_id_features(train_df,card_cols+addr_cols,'uniqueCrad1')
 test_df = Get_card_id_features(test_df,card_cols+addr_cols,'uniqueCrad1')
+train_df = Get_card_id_features(train_df,card_cols+email_cols,'uniqueCrad2')
+test_df = Get_card_id_features(test_df,card_cols+email_cols,'uniqueCrad2')
+train_df[[id_name]+[col for col in train_df.columns if 'uniqueCrad' in col]].to_csv('%s/data/uniqueCradTrain.csv'%root,index=False)
+test_df[[id_name]+[col for col in test_df.columns if 'uniqueCrad' in col]].to_csv('%s/data/uniqueCradTest.csv'%root,index=False)
 tt_df = train_df.append(test_df).reset_index(drop=True)
 del train_df,test_df
 tt_df = Get_new_features(tt_df)
