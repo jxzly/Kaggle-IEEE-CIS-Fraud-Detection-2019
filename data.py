@@ -210,10 +210,16 @@ def Get_new_features(df):
     df.loc[df["id_31"]=="chrome 66.0 for ios",'lastestBrowser']=1
     return df
 
-def Get_ave_interval(df,cols):
+def Get_ave_interval(df,cols,isTrain):
+    features = []
     for col in cols:
-        df['%sAveInterval'%cols] = df[col].map(dict(df.groupby([col])['TransactionDT'].agg(Get_list_ave_interval)))
-    return df
+        df['%sAveInterval'%col] = df[col].map(dict(df.groupby([col])['TransactionDT'].agg(Get_list_ave_interval)))
+        features.append('%sAveInterval'%col)
+    if isTrain:
+        df[[id_name]+features].to_csv('%s/data/aveIntervalTrain.csv'%root,index=False)
+    else:
+        df[[id_name]+features].to_csv('%s/data/aveIntervalTest.csv'%root,index=False)
+    return None
 
 def Get_C_interaction_features(df,isTrain):
     features = []
@@ -283,15 +289,9 @@ train_df,test_df = Get_train_test(nrows=None)
 train_nrows = train_df.shape[0]
 train_df = Get_nan_features(train_df)
 test_df = Get_nan_features(test_df)
-train_df = Get_ave_interval(train_df,c_cols+v_cols)
-test_df = Get_ave_interval(test_df,c_cols+v_cols)
-'''for col in ['card1']:
-    valid_card = pd.concat([train_df[[col]], test_df[[col]]])
-    valid_card = valid_card[col].value_counts()
-    valid_card = valid_card[valid_card>2]
-    valid_card = list(valid_card.index)
-    train_df[col] = np.where(train_df[col].isin(valid_card), train_df[col], '-999')
-    test_df[col]  = np.where(test_df[col].isin(valid_card), test_df[col], '-999')'''
+if True:
+    Get_ave_interval(train_df,c_cols+v_cols,True)
+    Get_ave_interval(test_df,c_cols+v_cols,False)
 if False:
     train_df = Get_card_id_features(train_df,card_cols,'uniqueCrad0')
     test_df = Get_card_id_features(test_df,card_cols,'uniqueCrad0')
@@ -331,7 +331,7 @@ for col in tt_df:
     else:
         tt_df[col ] = tt_df[col].fillna('-999')
 count_cols = ['day']
-count_label_cols = ['os','chrome','w','h','w-h','area','ratio','TF',\
+count_label_cols = ['P_emaildomain_bin','P_emaildomain_suffix','R_emaildomain_bin','R_emaildomain_suffix','os','chrome','w','h','w-h','area','ratio','TF',\
         'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-449562-369913','nan-585371-501629']
 target_cols = card_cols
 if True:
