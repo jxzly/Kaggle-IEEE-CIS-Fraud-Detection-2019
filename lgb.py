@@ -24,7 +24,7 @@ class Model():
         self.seed = seed
 
     def Train(self,trainDf,testDf,catFeatures,prefix=''):
-        skf = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.seed)
+        skf = KFold(n_splits=self.n_splits, shuffle=False, random_state=self.seed)
         train_cols = [col for col in trainDf.columns if col not in [id_name,label_name]]
         log = open('%s/log/train.log'%root,'w')
         Write_log(log,str(train_cols))
@@ -74,11 +74,11 @@ class Model():
             Write_log(log,'fold %s\n'%fold)
             for i in range(len(evals_result_dic['valid_1'][self.params['metric']])//self.verbose):
                 Write_log(log,' - %i round - train_metric: %.6f - val_metric: %.6f\n'%(i*self.verbose,evals_result_dic['training'][self.params['metric']][i*self.verbose],evals_result_dic['valid_1'][self.params['metric']][i*self.verbose]))
-            Write_log(log,'valid metric: %.8f\n'%AUC(trainDf.loc[val_index,label_name],val_pred))
+            Write_log(log,'valid metric: %.8f\n'%Metric(trainDf.loc[val_index,label_name],val_pred))
             plt.plot(evals_result_dic['valid_1'][self.params['metric']],label='fold%s'%(fold))
-        train_metric = AUC(train_target,train_pred)
+        train_metric = Metric(train_target,train_pred)
         print('all train metric:%.8f'%(train_metric))
-        valid_metric = AUC(trainDf[label_name],valid_df[label_name])
+        valid_metric = Metric(trainDf[label_name],valid_df[label_name])
         print('all valid metric:%.8f'%(valid_metric))
         real_metric = valid_metric + 0.0*(valid_metric-train_metric)
         print('real metric:%.8f'%(real_metric))

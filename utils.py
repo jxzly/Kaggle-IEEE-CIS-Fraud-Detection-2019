@@ -21,8 +21,13 @@ def Timer(title):
     print("%s - done in %is"%(title, (datetime.datetime.now() - t0).seconds))
     return None
 
+def Get_file_name(filePath):
+    '获取目录下的文件名'
+    for root, dires, files in os.walk(filePath):
+        return files
+
 def Metric(target,pred):
-    return Metric(target,pred)
+    return roc_auc_score(target,pred)
 
 def Lgb_f1_score(preds, data):
     labels = data.get_label()
@@ -101,6 +106,7 @@ def Data_review(trainDf,testDf,idName,labelName):
     info_df = pd.DataFrame(info,columns=['column','dataType','trainNunique','testNunique','trainTestIntersection','intersectionPct','trainModeOrMean','testModeOrMean','trainNanNum','testNanNum','miOrCorr'])
     return info_df
 
+'''
 def Count_encoding(df,cols,sparseThreshold=50):
     for col in cols:
         print(col)
@@ -110,7 +116,45 @@ def Count_encoding(df,cols,sparseThreshold=50):
         df[col] = df[col].rank(method='dense')
     df.drop(['tmp'],axis=1,inplace=True)
     return df
+'''
+def Count_encoding(df,cols,drop=True):
+    for col in cols:
+        print('count encoding:',col)
+        df['%sCount'%col] = df[col].map(dict(df[col].value_counts())).astype(int)
+    if drop:
+        df.drop(cols,axis=1,inplace=True)
+    return df
+
+def Count_label_encoding(df,cols,sparseThreshold=50):
+    for col in cols:
+        print('count label encoding:',col)
+        df['tmp'] = df[col].map(dict(df[col].value_counts())).astype(int)
+        df.loc[df['tmp']<sparseThreshold,col] = df.loc[df['tmp']<sparseThreshold,'tmp'].astype(str)
+        df.loc[df['tmp']>=sparseThreshold,col] = df.loc[df['tmp']>=sparseThreshold,'tmp'].astype(str) + '_' + df.loc[df['tmp']>=sparseThreshold,col].astype(str)
+        df[col] = df[col].rank(method='dense')
+    df.drop(['tmp'],axis=1,inplace=True)
+    return df
+
+def Target_encoding(df,cols,trainNrows,sparseThreshold=50):
+    for col in cols:
+        print('target encoding:',col)
+        df['tmp'] = df[col].map(dict(df[col].value_counts())).astype(int) + 1
+        print(dict(df.groupby([col])[Conf().label_name].mean()))
+        print(df.loc[df['tmp']>(sparseThreshold+1),col])
+        df.loc[df['tmp']>(sparseThreshold+1),'tmp'] = df.loc[df['tmp']>(sparseThreshold+1),col].map(dict(df.groupby([col])[Conf().label_name].mean()))
+        df[col] = df['tmp']
+    df.drop(['tmp'],axis=1,inplace=True)
+    return df
+
+def Get_list_ave_interval(x):
+    if len(x) < 2:
+        return -999
+    else:
+        return np.mean(np.diff(x))
+
 
 if __name__ == '__main__':
     df = pd.DataFrame({'a':['1','2_as','2_as','2_ff','2_ff','2_as','2_ff','1']})
     print(Count_encoding(df,['a'],3))
+    df = pd.DataFrame({'a':[1,2,3,4,4,4],'isFraud':[0,0,1,0,1,1]})
+    print(Target_encoding(df,['a'],6,2))

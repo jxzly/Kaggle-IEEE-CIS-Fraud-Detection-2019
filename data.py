@@ -27,13 +27,14 @@ v_cols = ['V%s'%(i+1) for i in range(339)]
 id_cols = ['id_%s'%str(i+1).zfill(2) for i in range(38)]
 device_cols = ['DeviceType','DeviceInfo']
 cat_cols = card_cols+['ProductCD','addr1','addr2']+email_cols+m_cols+['id_%s'%str(i+1).zfill(2) for i in range(11,38)]+device_cols
+TransactionDT_interval = [600,1800,3600,7200,18000]
 np.random.seed(2019)
 
 def Get_train_test(nrows=None):
     train_df1 = pd.read_csv('%s/data/train_identity.csv'%root)
-    train_df2 = pd.read_csv('%s/data/train_transaction.csv'%root,nrows=nrows)
+    train_df2 = pd.read_csv('%s/data/train_transaction.csv'%root,nrows=nrows,dtype={'TransactionAmt': str})
     test_df1 = pd.read_csv('%s/data/test_identity.csv'%root)
-    test_df2 = pd.read_csv('%s/data/test_transaction.csv'%root,nrows=nrows)
+    test_df2 = pd.read_csv('%s/data/test_transaction.csv'%root,nrows=nrows,dtype={'TransactionAmt': str})
     train_df = train_df2.merge(train_df1,how='left',on=id_name)
     test_df = test_df2.merge(test_df1,how='left',on=id_name)
     test_df[label_name] = -1
@@ -130,24 +131,97 @@ def Get_card_id_features(df,cardInfo,prefix,nJobs=8):
     #df = Count_encoding(df,[prefix])
     return df
 
-def Get_tt_group_features(df,cardInfo,prefix):
+def Get_tt_group_features(df,cardInfo,prefix,agg=True):
     if len(cardInfo) > 1:
-        df[prefix] = df[cardInfo].apply(lambda x:'_'.join(x),axis=1)
-    for col in ['TransactionAmt','TransactionAmtDecimal','id_02','C1','C8','C11','C13','C14','D2','D15','V201','V257','V258','V294','V317']:
-        print(df[col])
-        df['%s_%sDivCount'%(prefix,col)] = df[col].astype(float) / df[prefix].map(dict(df[prefix].value_counts()))
-        df['%s_%sDivMean'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('mean')
-        df['%s_%sDivstd'%(prefix,col)] = df[col].astype(float) / (df[[col,prefix]].groupby([prefix])[col].transform('std')+0.001)
+        df[prefix] = df[cardInfo].apply(lambda x:'_'.join([str(sub_x) for sub_x in x]),axis=1)
+    if agg:
+        for col in ['TransactionAmt','id_02','D15']:
+            if col in cardInfo:
+                continue
+            df['%s_%sDivCount'%(prefix,col)] = df[col].astype(float) / df[prefix].map(dict(df[prefix].value_counts()))
+            df['%s_%sDivMean'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('mean')
+            df['%s_%sDivStd'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('std')
+    if prefix == 'day':
+        for col in c_cols+d_cols:
+            df['%s_%sDivMean'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('mean')
     if len(cardInfo) > 1:
         df = Count_encoding(df,[prefix])#[prefix,prefix+'_lastTranDist',prefix+'_nextTranDist']
     return df
 
 def Get_new_features(df):
-    df['TransactionAmtDecimal'] = df['TransactionAmt'].apply(lambda x:1000*(x-x//1))
-    df['day'] = np.floor(df['TransactionDT']/(3600*24))
+    # TransactionAmt
+    df['TransactionAmtDecimal'] = df['TransactionAmt'].apply(lambda x:int(x.split('.')[1]))
+    df['TransactionAmtDecimalLength'] = df['TransactionAmt'].apply(lambda x:len(x.split('.')[1]))
+    df['TransactionAmt'] = df['TransactionAmt'].astype(float)
+
+    # emaildomain
+    df['isProtonMail'] = 0 + ((df['P_emaildomain'] == 'protonmail.com') | (df['R_emaildomain']  == 'protonmail.com'))
+    emails = {'gmail': 'google', 'att.net': 'att', 'twc.com': 'spectrum', 'scranton.edu': 'other', 'optonline.net': 'other',
+          'hotmail.co.uk': 'microsoft', 'comcast.net': 'other', 'yahoo.com.mx': 'yahoo', 'yahoo.fr': 'yahoo',
+          'yahoo.es': 'yahoo', 'charter.net': 'spectrum', 'live.com': 'microsoft', 'aim.com': 'aol', 'hotmail.de': 'microsoft',
+          'centurylink.net': 'centurylink', 'gmail.com': 'google', 'me.com': 'apple', 'earthlink.net': 'other',
+          'gmx.de': 'other', 'web.de': 'other', 'cfl.rr.com': 'other', 'hotmail.com': 'microsoft', 'protonmail.com': 'other',
+          'hotmail.fr': 'microsoft', 'windstream.net': 'other', 'outlook.es': 'microsoft', 'yahoo.co.jp': 'yahoo',
+          'yahoo.de': 'yahoo', 'servicios-ta.com': 'other', 'netzero.net': 'other', 'suddenlink.net': 'other',
+          'roadrunner.com': 'other', 'sc.rr.com': 'other', 'live.fr': 'microsoft', 'verizon.net': 'yahoo',
+          'msn.com': 'microsoft', 'q.com': 'centurylink', 'prodigy.net.mx': 'att', 'frontier.com': 'yahoo',
+          'anonymous.com': 'other', 'rocketmail.com': 'yahoo', 'sbcglobal.net': 'att', 'frontiernet.net': 'yahoo',
+          'ymail.com': 'yahoo', 'outlook.com': 'microsoft', 'mail.com': 'other', 'bellsouth.net': 'other',
+          'embarqmail.com': 'centurylink', 'cableone.net': 'other', 'hotmail.es': 'microsoft', 'mac.com': 'apple',
+          'yahoo.co.uk': 'yahoo', 'netzero.com': 'other', 'yahoo.com': 'yahoo', 'live.com.mx': 'microsoft', 'ptd.net': 'other',
+          'cox.net': 'other', 'aol.com': 'aol', 'juno.com': 'other', 'icloud.com': 'apple'}
+    us_emails = ['gmail', 'net', 'edu']
+    for c in ['P_emaildomain', 'R_emaildomain']:
+        df[c + '_bin'] = df[c].map(emails)
+        df[c + '_suffix'] = df[c].map(lambda x: str(x).split('.')[-1])
+        df[c + '_suffix'] = df[c + '_suffix'].map(lambda x: x if str(x) not in us_emails else 'us')
+
+    # TransactionDT
+    df['day'] = df['TransactionDT']//(3600*24)
     df['dayOfWeek'] = np.floor(df['TransactionDT']/(3600*24)) % 7
     df['hour'] = hours = np.floor(df['TransactionDT']/3600) % 24
+    for t in TransactionDT_interval:
+        df['TransactionDT_%s'%t] = df['TransactionDT'] // t * t
     df.drop(['TransactionDT'],axis=1,inplace=True)
+
+    # Browser
+    df['lastestBrowser'] = 0
+    df.loc[df["id_31"]=="samsung browser 7.0",'lastestBrowser']=1
+    df.loc[df["id_31"]=="opera 53.0",'lastestBrowser']=1
+    df.loc[df["id_31"]=="mobile safari 10.0",'lastestBrowser']=1
+    df.loc[df["id_31"]=="google search application 49.0",'lastestBrowser']=1
+    df.loc[df["id_31"]=="firefox 60.0",'lastestBrowser']=1
+    df.loc[df["id_31"]=="edge 17.0",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 69.0",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 67.0 for android",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 63.0 for android",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 63.0 for ios",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 64.0",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 64.0 for android",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 64.0 for ios",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 65.0",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 65.0 for android",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 65.0 for ios",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 66.0",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 66.0 for android",'lastestBrowser']=1
+    df.loc[df["id_31"]=="chrome 66.0 for ios",'lastestBrowser']=1
+    return df
+
+def Get_ave_interval(df,cols):
+    for col in cols:
+        df['%sAveInterval'%cols] = df[col].map(dict(df.groupby([col])['TransactionDT'].agg(Get_list_ave_interval)))
+    return df
+
+def Get_C_interaction_features(df,isTrain):
+    features = []
+    for i in range(len(c_cols)):
+        for j in range(i+1,len(c_cols)):
+            df['%sDiv%s'%(c_cols[j],c_cols[i])] = (df[c_cols[j]] / (df[c_cols[i]]+1)).fillna(-999)
+            features.append('%sDiv%s'%(c_cols[j],c_cols[i]))
+    if isTrain:
+        df[[id_name]+features].to_csv('%s/data/CInteractionTrain.csv'%root,index=False)
+    else:
+        df[[id_name]+features].to_csv('%s/data/CInteractionTest.csv'%root,index=False)
     return df
 
 def Get_id_features(df):
@@ -206,32 +280,57 @@ train_df,test_df = Get_train_test(nrows=None)
 train_nrows = train_df.shape[0]
 train_df = Get_nan_features(train_df)
 test_df = Get_nan_features(test_df)
-train_df = Get_card_id_features(train_df,card_cols,'uniqueCrad0')
-test_df = Get_card_id_features(test_df,card_cols,'uniqueCrad0')
-train_df = Get_card_id_features(train_df,card_cols+addr_cols,'uniqueCrad1')
-test_df = Get_card_id_features(test_df,card_cols+addr_cols,'uniqueCrad1')
-train_df = Get_card_id_features(train_df,card_cols+email_cols,'uniqueCrad2')
-test_df = Get_card_id_features(test_df,card_cols+email_cols,'uniqueCrad2')
-train_df[[id_name]+[col for col in train_df.columns if 'uniqueCrad' in col]].to_csv('%s/data/uniqueCradTrain.csv'%root,index=False)
-test_df[[id_name]+[col for col in test_df.columns if 'uniqueCrad' in col]].to_csv('%s/data/uniqueCradTest.csv'%root,index=False)
+train_df = Get_ave_interval(train_df,c_cols+v_cols)
+test_df = Get_ave_interval(test_df,c_cols+v_cols)
+'''for col in ['card1']:
+    valid_card = pd.concat([train_df[[col]], test_df[[col]]])
+    valid_card = valid_card[col].value_counts()
+    valid_card = valid_card[valid_card>2]
+    valid_card = list(valid_card.index)
+    train_df[col] = np.where(train_df[col].isin(valid_card), train_df[col], '-999')
+    test_df[col]  = np.where(test_df[col].isin(valid_card), test_df[col], '-999')'''
+if False:
+    train_df = Get_card_id_features(train_df,card_cols,'uniqueCrad0')
+    test_df = Get_card_id_features(test_df,card_cols,'uniqueCrad0')
+    train_df = Get_card_id_features(train_df,card_cols+addr_cols,'uniqueCrad1')
+    test_df = Get_card_id_features(test_df,card_cols+addr_cols,'uniqueCrad1')
+    train_df = Get_card_id_features(train_df,card_cols+email_cols,'uniqueCrad2')
+    test_df = Get_card_id_features(test_df,card_cols+email_cols,'uniqueCrad2')
+    train_df[[id_name]+[col for col in train_df.columns if 'uniqueCrad' in col]].to_csv('%s/data/uniqueCradTrain.csv'%root,index=False)
+    test_df[[id_name]+[col for col in test_df.columns if 'uniqueCrad' in col]].to_csv('%s/data/uniqueCradTest.csv'%root,index=False)
+if False:
+    Get_C_interaction_features(train_df,True)
+    Get_C_interaction_features(test_df,False)
 tt_df = train_df.append(test_df).reset_index(drop=True)
 del train_df,test_df
 tt_df = Get_new_features(tt_df)
 tt_df = Get_tt_group_features(tt_df,['day'],'day')
 tt_df = Get_tt_group_features(tt_df,['card1'],'card1')
+tt_df = Get_tt_group_features(tt_df,['card2'],'card2')
+tt_df = Get_tt_group_features(tt_df,['card3'],'card3')
 tt_df = Get_tt_group_features(tt_df,['card4'],'card4')
+tt_df = Get_tt_group_features(tt_df,['card5'],'card5')
 tt_df = Get_tt_group_features(tt_df,card_cols,'uniqueCrad0')
+tt_df = Get_tt_group_features(tt_df,card_cols+['TransactionAmt'],'uniqueCrad0Amt')
 tt_df = Get_tt_group_features(tt_df,card_cols+addr_cols,'uniqueCrad1')
-tt_df = Get_tt_group_features(tt_df,card_cols+email_cols,'uniqueCrad2')
+tt_df = Get_tt_group_features(tt_df,card_cols+addr_cols+['TransactionAmt'],'uniqueCrad1Amt')
+tt_df = Get_tt_group_features(tt_df,card_cols+addr_cols+email_cols,'uniqueCrad2')
+tt_df = Get_tt_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionAmt'],'uniqueCrad2Amt')
+for t in TransactionDT_interval:
+    tt_df = Get_tt_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionDT_%s'%t],'interval%sUniqueCrad2'%t)
+    tt_df = Get_tt_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionAmt','TransactionDT_%s'%t],'interval%sUniqueCrad2Amt'%t)
 tt_df = Get_id_features(tt_df)
 tt_df = Get_agg_features(tt_df)
 for col in tt_df:
     if tt_df[col].dtype != 'object':
         tt_df[col] = tt_df[col].fillna(-999)
-cat_cols = cat_cols+['os','chrome','w','h','w-h','area','ratio','TF',\
-        'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-449562-369913','nan-585371-501629']
-tt_df = Count_encoding(tt_df,cat_cols)
-tt_df['day'] = tt_df['day'].map(dict(tt_df['day'].value_counts()))
+count_cols = cat_cols+c_cols+v_cols+['os','chrome','w','h','w-h','area','ratio','TF',\
+        'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-449562-369913','nan-585371-501629','day']
+if True:
+    tt_df = Count_encoding(tt_df,count_cols)
+    tt_df[:train_nrows][[id_name]+count_cols].to_csv('%s/data/valueCountTrain.csv'%root,index=False)
+    tt_df[train_nrows:][[id_name]+count_cols].to_csv('%s/data/valueCountTest.csv'%root,index=False)
+tt_df.drop(count_cols,axis=1,inplace=True)
 print(tt_df.head())
 tt_df[:train_nrows].to_csv('%s/data/new_train.csv'%root,index=False)
 tt_df[train_nrows:].to_csv('%s/data/new_test.csv'%root,index=False)

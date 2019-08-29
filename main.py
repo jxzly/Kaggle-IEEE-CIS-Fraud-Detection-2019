@@ -51,6 +51,21 @@ def Lgb_folds_pred(nSplits=5,catFeatures=[],swapTargetFrac=0.0,seed=42):
           'reg_lambda': 0.6485237330340494,
           'random_state': 47
          }
+    lgb_params2 = {
+                    'objective':'binary',
+                    'boosting_type':'gbdt',
+                    'metric':'auc',
+                    'n_jobs':-1,
+                    'num_leaves' : 255,
+                    'learning_rate':0.01,
+                    'max_depth':-1,
+                    'colsample_bytree': 0.85,
+                    'subsample':0.85,
+                    'reg_alpha': 0.15,
+                    'reg_lambda': 0.85,
+                    'verbose':-1,
+                    'seed': 0,
+                }
     model = lgb.Model(params=lgb_params,rounds=4000,earlyStoppingRounds=200,verbose=100,nSplits=nSplits,swapTargetFrac=swapTargetFrac,seed=seed)
     model.Train(trainDf=train_df,testDf=test_df,catFeatures=catFeatures,prefix='')
     return None
@@ -77,11 +92,35 @@ def Cab_folds_pred(nSplits=5,catFeatures=[],swapTargetFrac=0.0,seed=42):
     model.Train(trainDf=train_df,testDf=test_df,catFeatures=catFeatures,prefix='')
     return None
 
-train_df = pd.read_csv('%s/data/new_train.csv'%root,nrows=None)
-test_df = pd.read_csv('%s/data/new_test.csv'%root,nrows=None)
+card_cols = ['card%s'%(i+1) for i in range(6)]
+addr_cols = ['addr1','addr2']
+email_cols = ['P_emaildomain','R_emaildomain']
+c_cols = ['C%s'%(i+1) for i in range(14)]
+d_cols = ['D%s'%(i+1) for i in range(15)]
+m_cols = ['M%s'%(i+1) for i in range(9)]
+v_cols = ['V%s'%(i+1) for i in range(339)]
+id_cols = ['id_%s'%str(i+1).zfill(2) for i in range(38)]
+device_cols = ['DeviceType','DeviceInfo']
+drop_cols = ['TransactionDT_600', 'TransactionDT_1800', 'TransactionDT_3600', 'TransactionDT_7200', 'TransactionDT_18000']#['day_V%sDivMean'%(i+1) for i in range(339)] + ['C11DivC%s'%(i+1) for i in range(10)]
+train_df = pd.read_csv('%s/data/new_train_best.csv'%root,nrows=None)
+test_df = pd.read_csv('%s/data/new_test_best.csv'%root,nrows=None)
+for prefix in ['uniqueCrad']:#,'valueCount'
+    sub_train_df = pd.read_csv('%s/data/%sTrain.csv'%(root,prefix),nrows=None)
+    sub_test_df = pd.read_csv('%s/data/%sTest.csv'%(root,prefix),nrows=None)
+    train_df = train_df.merge(sub_train_df,how='left',on=id_name)
+    test_df = test_df.merge(sub_test_df,how='left',on=id_name)
+    del sub_train_df,sub_test_df
 tt_df = train_df.append(test_df)
 cols = [col for col in tt_df.columns if 'TranDist' in col]
 tt_df = Count_encoding(tt_df,cols)
+#tt_df = tt_df.drop(drop_cols,axis=1)
+#for col in v_cols:
+#    print(col)
+    #intersection = set(train_df[col].unique()) & set(test_df[col].unique())
+    #tt_df.loc[~tt_df[col].isin(intersection),col] = -99
+    #value_counts = train_df[col].value_counts()
+    #sparse_value = value_counts[value_counts<50].index
+    #tt_df.loc[tt_df[col].isin(sparse_value),col] = -9
 train_df = tt_df[:train_df.shape[0]]
 test_df = tt_df[train_df.shape[0]:]
 del tt_df
