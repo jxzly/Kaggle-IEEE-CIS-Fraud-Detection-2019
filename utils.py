@@ -5,12 +5,15 @@ import numpy as np
 import os
 from sklearn.metrics import f1_score,roc_auc_score
 
+id_name = 'TransactionID'
+label_name = 'isFraud'
+
 class Conf():
     def __init__(self):
         self.c = 'Kaggle-IEEE-CIS-Fraud-Detection-2019'
         self.root = '/'.join(os.path.realpath(__file__).split('/')[:-1])#'F:/home/daishu/competition/%s/'%self.c#
-        self.id_name = 'TransactionID'
-        self.label_name = 'isFraud'
+        self.id_name = id_name
+        self.label_name = label_name
         self.random_state = 47
 
 @contextmanager
@@ -136,12 +139,13 @@ def Count_label_encoding(df,cols,sparseThreshold=50):
     return df
 
 def Target_encoding(df,cols,trainNrows,sparseThreshold=50):
+    target_mean = df[:trainNrows][label_name].mean()
     for col in cols:
         print('target encoding:',col)
-        df['tmp'] = df[col].map(dict(df[col].value_counts())).astype(int) + 1
-        print(dict(df.groupby([col])[Conf().label_name].mean()))
-        print(df.loc[df['tmp']>(sparseThreshold+1),col])
-        df.loc[df['tmp']>(sparseThreshold+1),'tmp'] = df.loc[df['tmp']>(sparseThreshold+1),col].map(dict(df.groupby([col])[Conf().label_name].mean()))
+        df['tmp'] = target_mean
+        train_value_counts = df[:trainNrows][col].value_counts()
+        gt_sparse_threshold_value = train_value_counts[train_value_counts>sparseThreshold].index
+        df.loc[df[col].isin(gt_sparse_threshold_value),'tmp'] = df.loc[df[col].isin(gt_sparse_threshold_value),col].map(dict(df[:trainNrows].groupby([col])[label_name].mean()))
         df[col] = df['tmp']
     df.drop(['tmp'],axis=1,inplace=True)
     return df
@@ -152,9 +156,8 @@ def Get_list_ave_interval(x):
     else:
         return np.mean(np.diff(x))
 
-
 if __name__ == '__main__':
     df = pd.DataFrame({'a':['1','2_as','2_as','2_ff','2_ff','2_as','2_ff','1']})
     print(Count_encoding(df,['a'],3))
     df = pd.DataFrame({'a':[1,2,3,4,4,4],'isFraud':[0,0,1,0,1,1]})
-    print(Target_encoding(df,['a'],6,2))
+    print(Target_encoding(df,['a'],4,1))
