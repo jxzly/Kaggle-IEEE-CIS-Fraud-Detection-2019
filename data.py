@@ -37,7 +37,7 @@ def Get_train_test(nrows=None):
     test_df2 = pd.read_csv('%s/data/test_transaction.csv'%root,nrows=nrows,dtype={'TransactionAmt': str})
     train_df = train_df2.merge(train_df1,how='left',on=id_name)
     test_df = test_df2.merge(test_df1,how='left',on=id_name)
-    test_df[label_name] = -1
+    test_df[label_name] = 0
     return train_df,test_df
 
 def Get_nan_features(df):
@@ -131,7 +131,7 @@ def Get_card_id_features(df,cardInfo,prefix,nJobs=8):
     #df = Count_encoding(df,[prefix])
     return df
 
-def Get_card_group_features(df,cardInfo,prefix,trainNrows=None,encoding='count',agg=True):
+def Get_card_group_features(df,cardInfo,prefix,trainNrows=None,agg=True,encoding='count',cumCount=True,cumTarget=False):
     if len(cardInfo) > 1:
         df[prefix] = df[cardInfo].apply(lambda x:'_'.join([str(sub_x) for sub_x in x]),axis=1)
     if agg:
@@ -147,8 +147,13 @@ def Get_card_group_features(df,cardInfo,prefix,trainNrows=None,encoding='count',
     if len(cardInfo) > 1:
         if encoding == 'count':
             df = Count_encoding(df,[prefix])#[prefix,prefix+'_lastTranDist',prefix+'_nextTranDist']
+        elif encoding == 'count_label':
+            df = Count_label_encoding(df,[prefix])
         elif encoding == 'target':
             df = Target_encoding(df,[prefix],trainNrows=trainNrows,sparseThreshold=0)
+    if cum:
+        df['%sCumCount'%prefix] = df.groupby(prefix)[id_name].transform(lambda x:Get_count_sum(x,shift=1))
+        df['%sCumTarget'%prefix] = df.groupby(prefix)[label_name].transform(lambda x:Get_cum_sum(x,shift=1))
     return df
 
 def Get_new_features(df):
@@ -309,18 +314,18 @@ if False:
 tt_df = train_df.append(test_df).reset_index(drop=True)
 del train_df,test_df
 tt_df = Get_new_features(tt_df)
-tt_df = Get_card_group_features(tt_df,['day'],'day')
-tt_df = Get_card_group_features(tt_df,['card1'],'card1')
-tt_df = Get_card_group_features(tt_df,['card2'],'card2')
-tt_df = Get_card_group_features(tt_df,['card3'],'card3')
-tt_df = Get_card_group_features(tt_df,['card4'],'card4')
-tt_df = Get_card_group_features(tt_df,['card5'],'card5')
-tt_df = Get_card_group_features(tt_df,['card6'],'card6')
-tt_df = Get_card_group_features(tt_df,card_cols,'uniqueCrad0',trainNrows=train_nrows,encoding='target')
+tt_df = Get_card_group_features(tt_df,['day'],'day',cumCount=False,cumTarget=False)
+tt_df = Get_card_group_features(tt_df,['card1'],'card1',cumCount=True,cumTarget=True)
+tt_df = Get_card_group_features(tt_df,['card2'],'card2',cumCount=True,cumTarget=True)
+tt_df = Get_card_group_features(tt_df,['card3'],'card3',cumCount=True,cumTarget=True)
+tt_df = Get_card_group_features(tt_df,['card4'],'card4',cumCount=False,cumTarget=False)
+tt_df = Get_card_group_features(tt_df,['card5'],'card5',cumCount=True,cumTarget=True)
+tt_df = Get_card_group_features(tt_df,['card6'],'card6',cumCount=False,cumTarget=False)
+tt_df = Get_card_group_features(tt_df,card_cols,'uniqueCrad0')#,trainNrows=train_nrows,encoding='target')
 tt_df = Get_card_group_features(tt_df,card_cols+['TransactionAmt'],'uniqueCrad0Amt')
-tt_df = Get_card_group_features(tt_df,card_cols+addr_cols,'uniqueCrad1',trainNrows=train_nrows,encoding='target')
+tt_df = Get_card_group_features(tt_df,card_cols+addr_cols,'uniqueCrad1')#,trainNrows=train_nrows,encoding='target')
 tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+['TransactionAmt'],'uniqueCrad1Amt')
-tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols,'uniqueCrad2',trainNrows=train_nrows,encoding='target')
+tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols,'uniqueCrad2')#,trainNrows=train_nrows,encoding='target')
 tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionAmt'],'uniqueCrad2Amt')
 for t in TransactionDT_interval:
     tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionDT_%s'%t],'interval%sUniqueCrad2'%t)
@@ -332,10 +337,10 @@ for col in tt_df:
         tt_df[col] = tt_df[col].fillna(-999)
     else:
         tt_df[col ] = tt_df[col].fillna('-999')
-count_cols = ['day']
+count_cols = card_cols + ['day']
 count_label_cols = ['P_emaildomain_bin','P_emaildomain_suffix','R_emaildomain_bin','R_emaildomain_suffix','os','chrome','w','h','w-h','area','ratio','TF',\
         'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-449562-369913','nan-585371-501629']
-target_cols = card_cols
+target_cols = []
 if True:
     tt_df = Count_encoding(tt_df,count_cols,drop=True)
     tt_df = Count_label_encoding(tt_df,count_label_cols)

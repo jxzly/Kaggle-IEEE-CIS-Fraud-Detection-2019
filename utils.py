@@ -156,6 +156,21 @@ def Get_list_ave_interval(x):
     else:
         return np.mean(np.diff(x))
 
+def Get_count_sum(x,shift=0):
+    x = list(range(shift,len(x)+shift))
+    if shift != 0:
+        x = np.roll(x,shift)
+        for i in range(shift):
+            x[i] = 0
+    return x
+
+def Get_cum_sum(x,shift=0):
+    if shift != 0:
+        x = np.roll(x,shift)
+        for i in range(shift):
+            x[i] = 0
+    return np.cumsum(x)
+
 if __name__ == '__main__':
     df = pd.DataFrame({'a':['1','2_as','2_as','2_ff','2_ff','2_as','2_ff','1']})
     print(Count_encoding(df,['a'],3))
