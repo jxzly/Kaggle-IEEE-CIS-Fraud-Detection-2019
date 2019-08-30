@@ -321,15 +321,15 @@ tt_df = Get_card_group_features(tt_df,['card3'],'card3',cumCount=True,cumTarget=
 tt_df = Get_card_group_features(tt_df,['card4'],'card4',cumCount=False,cumTarget=False)
 tt_df = Get_card_group_features(tt_df,['card5'],'card5',cumCount=True,cumTarget=True)
 tt_df = Get_card_group_features(tt_df,['card6'],'card6',cumCount=False,cumTarget=False)
-tt_df = Get_card_group_features(tt_df,card_cols,'uniqueCrad0')#,trainNrows=train_nrows,encoding='target')
-tt_df = Get_card_group_features(tt_df,card_cols+['TransactionAmt'],'uniqueCrad0Amt')
-tt_df = Get_card_group_features(tt_df,card_cols+addr_cols,'uniqueCrad1')#,trainNrows=train_nrows,encoding='target')
-tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+['TransactionAmt'],'uniqueCrad1Amt')
-tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols,'uniqueCrad2')#,trainNrows=train_nrows,encoding='target')
-tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionAmt'],'uniqueCrad2Amt')
+tt_df = Get_card_group_features(tt_df,card_cols,'uniqueCrad0',cumCount=True,cumTarget=True)#,trainNrows=train_nrows,encoding='target')
+tt_df = Get_card_group_features(tt_df,card_cols+['TransactionAmt'],'uniqueCrad0Amt',cumCount=True,cumTarget=False)
+tt_df = Get_card_group_features(tt_df,card_cols+addr_cols,'uniqueCrad1',cumCount=True,cumTarget=True)#,trainNrows=train_nrows,encoding='target')
+tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+['TransactionAmt'],'uniqueCrad1Amt',cumCount=True,cumTarget=False)
+tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols,'uniqueCrad2',cumCount=True,cumTarget=False)#,trainNrows=train_nrows,encoding='target')
+tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionAmt'],'uniqueCrad2Amt',cumCount=True,cumTarget=False)
 for t in TransactionDT_interval:
-    tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionDT_%s'%t],'interval%sUniqueCrad2'%t)
-    tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionAmt','TransactionDT_%s'%t],'interval%sUniqueCrad2Amt'%t)
+    tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionDT_%s'%t],'interval%sUniqueCrad2'%t,cumCount=True,cumTarget=False)
+    tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionAmt','TransactionDT_%s'%t],'interval%sUniqueCrad2Amt'%t,cumCount=True,cumTarget=False)
 tt_df = Get_id_features(tt_df)
 tt_df = Get_agg_features(tt_df)
 for col in tt_df:
@@ -337,8 +337,8 @@ for col in tt_df:
         tt_df[col] = tt_df[col].fillna(-999)
     else:
         tt_df[col ] = tt_df[col].fillna('-999')
-count_cols = card_cols + ['day']
-count_label_cols = ['P_emaildomain_bin','P_emaildomain_suffix','R_emaildomain_bin','R_emaildomain_suffix','os','chrome','w','h','w-h','area','ratio','TF',\
+count_cols = ['day']
+count_label_cols = cat_cols + ['P_emaildomain_bin','P_emaildomain_suffix','R_emaildomain_bin','R_emaildomain_suffix','os','chrome','w','h','w-h','area','ratio','TF',\
         'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-449562-369913','nan-585371-501629']
 target_cols = []
 if True:
@@ -350,6 +350,7 @@ if True:
     tt_df.drop(['%sCount'%col for col in count_cols]+count_label_cols+target_cols,axis=1,inplace=True)
 else:
     tt_df.drop(count_cols+count_label_cols+target_cols,axis=1,inplace=True)
+drop_cols = ['TransactionDT_%s'%t for t in TransactionDT_interval]
 print(tt_df.head())
 tt_df[:train_nrows].to_csv('%s/data/new_train.csv'%root,index=False)
 tt_df[train_nrows:].to_csv('%s/data/new_test.csv'%root,index=False)
