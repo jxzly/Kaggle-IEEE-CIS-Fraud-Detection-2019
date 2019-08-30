@@ -102,9 +102,9 @@ v_cols = ['V%s'%(i+1) for i in range(339)]
 id_cols = ['id_%s'%str(i+1).zfill(2) for i in range(38)]
 device_cols = ['DeviceType','DeviceInfo']
 drop_cols = ['TransactionDT_600', 'TransactionDT_1800', 'TransactionDT_3600', 'TransactionDT_7200', 'TransactionDT_18000']#['day_V%sDivMean'%(i+1) for i in range(339)] + ['C11DivC%s'%(i+1) for i in range(10)]
-train_df = pd.read_csv('%s/data/new_train_best.csv'%root,nrows=None)
-test_df = pd.read_csv('%s/data/new_test_best.csv'%root,nrows=None)
-for prefix in ['uniqueCrad']:#,'valueCount'
+train_df = pd.read_csv('%s/data/new_train.csv'%root,nrows=None)
+test_df = pd.read_csv('%s/data/new_test.csv'%root,nrows=None)
+for prefix in ['uniqueCrad','encoding']:#,'valueCount'
     sub_train_df = pd.read_csv('%s/data/%sTrain.csv'%(root,prefix),nrows=None)
     sub_test_df = pd.read_csv('%s/data/%sTest.csv'%(root,prefix),nrows=None)
     train_df = train_df.merge(sub_train_df,how='left',on=id_name)
@@ -112,7 +112,7 @@ for prefix in ['uniqueCrad']:#,'valueCount'
     del sub_train_df,sub_test_df
 tt_df = train_df.append(test_df)
 cols = [col for col in tt_df.columns if 'TranDist' in col]
-tt_df = Count_encoding(tt_df,cols)
+tt_df = Count_label_encoding(tt_df,cols+['ProductCD','addr1','addr2']+email_cols+m_cols+['id_%s'%str(i+1).zfill(2) for i in range(11,38)]+device_cols)
 #tt_df = tt_df.drop(drop_cols,axis=1)
 #for col in v_cols:
 #    print(col)

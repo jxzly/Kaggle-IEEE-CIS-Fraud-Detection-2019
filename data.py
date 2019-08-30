@@ -213,12 +213,13 @@ def Get_new_features(df):
 def Get_ave_interval(df,cols,isTrain):
     features = []
     for col in cols:
-        df['%sAveInterval'%col] = df[col].map(dict(df.groupby([col])['TransactionDT'].agg(Get_list_ave_interval)))
+        df['%sAveInterval'%col] = df[col].map(dict(df.groupby([col])['TransactionDT'].agg(Get_list_ave_interval))).fillna(-999)
         features.append('%sAveInterval'%col)
     if isTrain:
         df[[id_name]+features].to_csv('%s/data/aveIntervalTrain.csv'%root,index=False)
     else:
         df[[id_name]+features].to_csv('%s/data/aveIntervalTest.csv'%root,index=False)
+    df.drop(features,axis=1,inplace=True)
     return None
 
 def Get_C_interaction_features(df,isTrain):
@@ -231,6 +232,7 @@ def Get_C_interaction_features(df,isTrain):
         df[[id_name]+features].to_csv('%s/data/CInteractionTrain.csv'%root,index=False)
     else:
         df[[id_name]+features].to_csv('%s/data/CInteractionTest.csv'%root,index=False)
+    df.drop(features,axis=1,inplace=True)
     return df
 
 def Get_id_features(df):
@@ -338,9 +340,11 @@ if True:
     tt_df = Count_encoding(tt_df,count_cols,drop=True)
     tt_df = Count_label_encoding(tt_df,count_label_cols)
     tt_df = Target_encoding(tt_df,target_cols,trainNrows=train_nrows,sparseThreshold=0)
-    tt_df[:train_nrows][[id_name]+count_cols+count_label_cols+target_cols].to_csv('%s/data/encodingTrain.csv'%root,index=False)
-    tt_df[train_nrows:][[id_name]+count_cols+count_label_cols+target_cols].to_csv('%s/data/encodingTest.csv'%root,index=False)
-tt_df.drop(count_label_cols+count_cols+target_cols,axis=1,inplace=True)
+    tt_df[:train_nrows][[id_name]+['%sCount'%col for col in count_cols]+count_label_cols+target_cols].to_csv('%s/data/encodingTrain.csv'%root,index=False)
+    tt_df[train_nrows:][[id_name]+['%sCount'%col for col in count_cols]+count_label_cols+target_cols].to_csv('%s/data/encodingTest.csv'%root,index=False)
+    tt_df.drop(['%sCount'%col for col in count_cols]+count_label_cols+target_cols,axis=1,inplace=True)
+else:
+    tt_df.drop(count_cols+count_label_cols+target_cols,axis=1,inplace=True)
 print(tt_df.head())
 tt_df[:train_nrows].to_csv('%s/data/new_train.csv'%root,index=False)
 tt_df[train_nrows:].to_csv('%s/data/new_test.csv'%root,index=False)
