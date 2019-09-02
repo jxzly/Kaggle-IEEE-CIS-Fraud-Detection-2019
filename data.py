@@ -27,7 +27,7 @@ v_cols = ['V%s'%(i+1) for i in range(339)]
 id_cols = ['id_%s'%str(i+1).zfill(2) for i in range(38)]
 device_cols = ['DeviceType','DeviceInfo']
 cat_cols = card_cols+['ProductCD','addr1','addr2']+email_cols+m_cols+['id_%s'%str(i+1).zfill(2) for i in range(11,38)]+device_cols
-TransactionDT_interval = [600,1800,3600,7200,18000]
+TransactionDT_interval = [86400,86400*7]
 np.random.seed(2019)
 
 def Get_train_test(nrows=None):
@@ -131,36 +131,13 @@ def Get_card_id_features(df,cardInfo,prefix,nJobs=8):
     #df = Count_encoding(df,[prefix])
     return df
 
-def Get_card_group_features(df,cardInfo,prefix,trainNrows=None,agg=True,encoding='count',cumCount=True,cumTarget=False):
-    if len(cardInfo) > 1:
-        df[prefix] = df[cardInfo].apply(lambda x:'_'.join([str(sub_x) for sub_x in x]),axis=1)
-    if agg:
-        for col in ['TransactionAmt','id_02','D15']:
-            if col in cardInfo:
-                continue
-            df['%s_%sDivCount'%(prefix,col)] = df[col].astype(float) / df[prefix].map(dict(df[prefix].value_counts()))
-            df['%s_%sDivMean'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('mean')
-            df['%s_%sDivStd'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('std')
-    if prefix == 'day':
-        for col in c_cols+d_cols:
-            df['%s_%sDivMean'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('mean')
-    if len(cardInfo) > 1:
-        if encoding == 'count':
-            df = Count_encoding(df,[prefix])#[prefix,prefix+'_lastTranDist',prefix+'_nextTranDist']
-        elif encoding == 'count_label':
-            df = Count_label_encoding(df,[prefix])
-        elif encoding == 'target':
-            df = Target_encoding(df,[prefix],trainNrows=trainNrows,sparseThreshold=0)
-    if cum:
-        df['%sCumCount'%prefix] = df.groupby(prefix)[id_name].transform(lambda x:Get_count_sum(x,shift=1))
-        df['%sCumTarget'%prefix] = df.groupby(prefix)[label_name].transform(lambda x:Get_cum_sum(x,shift=1))
-    return df
-
 def Get_new_features(df):
     # TransactionAmt
     df['TransactionAmtDecimal'] = df['TransactionAmt'].apply(lambda x:int(x.split('.')[1]))
+    df['TransactionAmtDecimal5'] = df['TransactionAmtDecimal'] % 5
     df['TransactionAmtDecimalLength'] = df['TransactionAmt'].apply(lambda x:len(x.split('.')[1]))
     df['TransactionAmt'] = df['TransactionAmt'].astype(float)
+    df['TransactionAmt5'] = df['TransactionAmt'] % 5
 
     # emaildomain
     df['isProtonMail'] = 0 + ((df['P_emaildomain'] == 'protonmail.com') | (df['R_emaildomain']  == 'protonmail.com'))
@@ -292,44 +269,95 @@ def Get_agg_features(df):
     df['nan-585385-501632'] = df[['id_07','id_08']].sum(axis=1)
     return df
 
+def Get_card_group_features(df,cardInfo,prefix,trainNrows=None,denoise=False,agg=True,norm=False,encoding='count'):
+    norm_cols = v_cols#['V258','C14','V201','C1','C13','V257','V246','V317','C8']#c_cols + ['V37','V38','V44','V45','V55','V56','V77','V78','V86','V87','V103','V201','V243','V246','V258','V257','V317']
+    if len(cardInfo) > 1:
+        df[prefix] = df[cardInfo].apply(lambda x:'_'.join([str(sub_x) for sub_x in x]),axis=1)
+    if denoise:
+        intersection_value = set(df[:trainNrows][prefix].unique()) & set(df[trainNrows:][prefix].unique())
+        if df[prefix].dtype == 'object':
+            df.loc[~df[prefix].isin(intersection_value),prefix] = '-99'
+        else:
+            df.loc[~df[prefix].isin(intersection_value),prefix] = -99
+    if agg:
+        for col in ['TransactionAmt','id_02']:
+            if col in cardInfo:
+                continue
+            df['%s_%sMean'%(prefix,col)] = df[[col,prefix]].groupby([prefix])[col].transform('mean')
+            df['%s_%sStd'%(prefix,col)] = df[[col,prefix]].groupby([prefix])[col].transform('std')
+            df['%s_%sDivCount'%(prefix,col)] = df[col].astype(float) / df[prefix].map(dict(df[prefix].value_counts()))
+            df['%s_%sDivMean'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('mean')
+            df['%s_%sDivMax'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('max')
+    if norm:
+        for col in norm_cols:
+            df['%s_%sNorm'%(prefix,col)] = df[[col,prefix]].groupby([prefix])[col].transform(Norm)
+    if 'TransactionAmt' not in cardInfo:
+        df['amt_%sNunique'%prefix] = df.groupby(['TransactionAmt','ProductCD'])[prefix].transform('nunique')
+    else:
+        df['%sDayNunique'%prefix] = df.groupby([prefix])['day'].transform('nunique')
+    if prefix == 'day':
+        for col in d_cols:
+            df['%s_%sDivMean'%(prefix,col)] = df[col].astype(float) / df[[col,prefix]].groupby([prefix])[col].transform('mean')
+    #if cumCount:
+    #    df['%sCumCount'%prefix] = df.groupby(prefix)[id_name].transform(lambda x:Get_count_sum(x,shift=1))
+    #if cumTarget:
+    #    df['%sCumTarget'%prefix] = df.groupby(prefix)[label_name].transform(lambda x:Get_cum_sum(x,shift=1))
+    if len(cardInfo) > 1:
+        if encoding == 'count':
+            df = Count_encoding(df,[prefix])#[prefix,prefix+'_lastTranDist',prefix+'_nextTranDist']
+        elif encoding == 'count_label':
+            df = Count_label_encoding(df,[prefix])
+        elif encoding == 'target':
+            df = Target_encoding(df,[prefix],trainNrows=trainNrows,sparseThreshold=0)
+        else:
+            for col in encoding:
+                df['%s_%sMean'%(prefix,col)] = df[[col,prefix]].groupby([prefix])[col].transform('mean')
+            df.drop(prefix,axis=1,inplace=True)
+    return df
+
 train_df,test_df = Get_train_test(nrows=None)
 train_nrows = train_df.shape[0]
 train_df = Get_nan_features(train_df)
 test_df = Get_nan_features(test_df)
-if True:
+if False:
     Get_ave_interval(train_df,c_cols+v_cols,True)
     Get_ave_interval(test_df,c_cols+v_cols,False)
 if False:
-    train_df = Get_card_id_features(train_df,card_cols,'uniqueCrad0')
-    test_df = Get_card_id_features(test_df,card_cols,'uniqueCrad0')
-    train_df = Get_card_id_features(train_df,card_cols+addr_cols,'uniqueCrad1')
-    test_df = Get_card_id_features(test_df,card_cols+addr_cols,'uniqueCrad1')
-    train_df = Get_card_id_features(train_df,card_cols+email_cols,'uniqueCrad2')
-    test_df = Get_card_id_features(test_df,card_cols+email_cols,'uniqueCrad2')
-    train_df[[id_name]+[col for col in train_df.columns if 'uniqueCrad' in col]].to_csv('%s/data/uniqueCradTrain.csv'%root,index=False)
-    test_df[[id_name]+[col for col in test_df.columns if 'uniqueCrad' in col]].to_csv('%s/data/uniqueCradTest.csv'%root,index=False)
+    train_df = Get_card_id_features(train_df,card_cols,'uniqueCard0')
+    test_df = Get_card_id_features(test_df,card_cols,'uniqueCard0')
+    train_df = Get_card_id_features(train_df,card_cols+addr_cols,'uniqueCard1')
+    test_df = Get_card_id_features(test_df,card_cols+addr_cols,'uniqueCard1')
+    train_df = Get_card_id_features(train_df,card_cols+email_cols,'uniqueCard2')
+    test_df = Get_card_id_features(test_df,card_cols+email_cols,'uniqueCard2')
+    train_df[[id_name]+[col for col in train_df.columns if 'uniqueCard' in col]].to_csv('%s/data/uniqueCardTrain.csv'%root,index=False)
+    test_df[[id_name]+[col for col in test_df.columns if 'uniqueCard' in col]].to_csv('%s/data/uniqueCardTest.csv'%root,index=False)
 if False:
     Get_C_interaction_features(train_df,True)
     Get_C_interaction_features(test_df,False)
 tt_df = train_df.append(test_df).reset_index(drop=True)
 del train_df,test_df
 tt_df = Get_new_features(tt_df)
-tt_df = Get_card_group_features(tt_df,['day'],'day',cumCount=False,cumTarget=False)
-tt_df = Get_card_group_features(tt_df,['card1'],'card1',cumCount=True,cumTarget=True)
-tt_df = Get_card_group_features(tt_df,['card2'],'card2',cumCount=True,cumTarget=True)
-tt_df = Get_card_group_features(tt_df,['card3'],'card3',cumCount=True,cumTarget=True)
-tt_df = Get_card_group_features(tt_df,['card4'],'card4',cumCount=False,cumTarget=False)
-tt_df = Get_card_group_features(tt_df,['card5'],'card5',cumCount=True,cumTarget=True)
-tt_df = Get_card_group_features(tt_df,['card6'],'card6',cumCount=False,cumTarget=False)
-tt_df = Get_card_group_features(tt_df,card_cols,'uniqueCrad0',cumCount=True,cumTarget=True)#,trainNrows=train_nrows,encoding='target')
-tt_df = Get_card_group_features(tt_df,card_cols+['TransactionAmt'],'uniqueCrad0Amt',cumCount=True,cumTarget=False)
-tt_df = Get_card_group_features(tt_df,card_cols+addr_cols,'uniqueCrad1',cumCount=True,cumTarget=True)#,trainNrows=train_nrows,encoding='target')
-tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+['TransactionAmt'],'uniqueCrad1Amt',cumCount=True,cumTarget=False)
-tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols,'uniqueCrad2',cumCount=True,cumTarget=False)#,trainNrows=train_nrows,encoding='target')
-tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionAmt'],'uniqueCrad2Amt',cumCount=True,cumTarget=False)
+tt_df = Get_card_group_features(tt_df,['day'],'day')
+tt_df = Get_card_group_features(tt_df,['TransactionAmt','ProductCD'],'amt',agg=False)
+tt_df = Get_card_group_features(tt_df,['card1'],'card1',encoding=['C1','C14','V257','V258'])
+tt_df = Get_card_group_features(tt_df,['card2'],'card2',encoding=['C1','C14','V257','V258'])
+tt_df = Get_card_group_features(tt_df,['card3'],'card3',encoding=['C1','C14','V257','V258'],norm=True)
+tt_df = Get_card_group_features(tt_df,['card4'],'card4')
+tt_df = Get_card_group_features(tt_df,['card5'],'card5',encoding=['C1','C14','V257','V258'],norm=True)
+tt_df = Get_card_group_features(tt_df,['card6'],'card6')
+tt_df = Get_card_group_features(tt_df,['card3','TransactionAmt','ProductCD'],'card3Amt',agg=False)
+tt_df = Get_card_group_features(tt_df,['card3','card5','TransactionAmt','ProductCD'],'card35Amt',agg=False)
+tt_df = Get_card_group_features(tt_df,card_cols,'uniqueCard0',encoding=['C1','C14','V257','V258'])#,trainNrows=train_nrows,encoding='target')
+tt_df = Get_card_group_features(tt_df,card_cols+['TransactionAmt','ProductCD'],'uniqueCard0Amt',agg=False)
+tt_df = Get_card_group_features(tt_df,card_cols+addr_cols,'uniqueCard1',encoding=['C1','C14','V257','V258'])#,trainNrows=train_nrows,encoding='target')
+tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+['ProductCD'],'uniqueCard1ProductCD')
+tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+['TransactionAmt','ProductCD'],'uniqueCard1Amt',agg=False)
+tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols,'uniqueCard2',encoding=['C1','C14','V257','V258'])#,trainNrows=train_nrows,encoding='target')
+tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionAmt','ProductCD'],'uniqueCard2Amt',agg=False)
 for t in TransactionDT_interval:
-    tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionDT_%s'%t],'interval%sUniqueCrad2'%t,cumCount=True,cumTarget=False)
-    tt_df = Get_card_group_features(tt_df,card_cols+addr_cols+email_cols+['TransactionAmt','TransactionDT_%s'%t],'interval%sUniqueCrad2Amt'%t,cumCount=True,cumTarget=False)
+    tt_df = Get_card_group_features(tt_df,['TransactionAmt','ProductCD']+['TransactionDT_%s'%t],'interval%sAmt'%t,agg=False)
+    tt_df = Get_card_group_features(tt_df,['card3']+['TransactionDT_%s'%t],'interval%sCard3'%t,agg=False)
+    tt_df = Get_card_group_features(tt_df,['card3']+['TransactionAmt','ProductCD','TransactionDT_%s'%t],'interval%sCrad3Amt'%t,agg=False)
 tt_df = Get_id_features(tt_df)
 tt_df = Get_agg_features(tt_df)
 for col in tt_df:
@@ -337,20 +365,21 @@ for col in tt_df:
         tt_df[col] = tt_df[col].fillna(-999)
     else:
         tt_df[col ] = tt_df[col].fillna('-999')
-count_cols = ['day']
+count_cols = ['day'] + v_cols
 count_label_cols = cat_cols + ['P_emaildomain_bin','P_emaildomain_suffix','R_emaildomain_bin','R_emaildomain_suffix','os','chrome','w','h','w-h','area','ratio','TF',\
-        'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-449562-369913','nan-585371-501629']
+        'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-585371-501629']
 target_cols = []
-if True:
+if False:
     tt_df = Count_encoding(tt_df,count_cols,drop=True)
     tt_df = Count_label_encoding(tt_df,count_label_cols)
-    tt_df = Target_encoding(tt_df,target_cols,trainNrows=train_nrows,sparseThreshold=0)
+    #tt_df = Target_encoding(tt_df,target_cols,trainNrows=train_nrows,sparseThreshold=0)
     tt_df[:train_nrows][[id_name]+['%sCount'%col for col in count_cols]+count_label_cols+target_cols].to_csv('%s/data/encodingTrain.csv'%root,index=False)
     tt_df[train_nrows:][[id_name]+['%sCount'%col for col in count_cols]+count_label_cols+target_cols].to_csv('%s/data/encodingTest.csv'%root,index=False)
     tt_df.drop(['%sCount'%col for col in count_cols]+count_label_cols+target_cols,axis=1,inplace=True)
 else:
     tt_df.drop(count_cols+count_label_cols+target_cols,axis=1,inplace=True)
 drop_cols = ['TransactionDT_%s'%t for t in TransactionDT_interval]
+tt_df.drop(drop_cols,axis=1,inplace=True)
 print(tt_df.head())
 tt_df[:train_nrows].to_csv('%s/data/new_train.csv'%root,index=False)
 tt_df[train_nrows:].to_csv('%s/data/new_test.csv'%root,index=False)

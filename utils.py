@@ -171,6 +171,17 @@ def Get_cum_sum(x,shift=0):
             x[i] = 0
     return np.cumsum(x)
 
+def Norm(x):
+    x = np.array(x)
+    if len(x) == 1:
+        return [0]
+    if len(x[~np.isnan(x)]) == 0:
+        return x
+    x[np.isnan(x)] = np.mean(x[~np.isnan(x)])
+    if x.min() == x.max():
+        return [-1 for i in range(len(x))]
+    return (x-x.min())/(x.max()-x.min())
+
 if __name__ == '__main__':
     df = pd.DataFrame({'a':['1','2_as','2_as','2_ff','2_ff','2_as','2_ff','1']})
     print(Count_encoding(df,['a'],3))
