@@ -270,7 +270,7 @@ def Get_agg_features(df):
     return df
 
 def Get_card_group_features(df,cardInfo,prefix,trainNrows=None,denoise=False,agg=True,norm=False,encoding='count'):
-    norm_cols = v_cols#['V258','C14','V201','C1','C13','V257','V246','V317','C8']#c_cols + ['V37','V38','V44','V45','V55','V56','V77','V78','V86','V87','V103','V201','V243','V246','V258','V257','V317']
+    norm_cols = ['V258','C14','V201','C1','C13','V257','V246','V317','C8']#c_cols + ['V37','V38','V44','V45','V55','V56','V77','V78','V86','V87','V103','V201','V243','V246','V258','V257','V317']
     if len(cardInfo) > 1:
         df[prefix] = df[cardInfo].apply(lambda x:'_'.join([str(sub_x) for sub_x in x]),axis=1)
     if denoise:
@@ -310,10 +310,10 @@ def Get_card_group_features(df,cardInfo,prefix,trainNrows=None,denoise=False,agg
         elif encoding == 'target':
             df = Target_encoding(df,[prefix],trainNrows=trainNrows,sparseThreshold=0)
         else:
-            for col in encoding:
-                df['%s_%sMean'%(prefix,col)] = df[[col,prefix]].groupby([prefix])[col].transform('mean')
-            df.drop(prefix,axis=1,inplace=True)
+            _,df = Mean_encoding(df,prefix,encoding,drop=True)
     return df
+
+
 
 train_df,test_df = Get_train_test(nrows=None)
 train_nrows = train_df.shape[0]
@@ -339,11 +339,11 @@ del train_df,test_df
 tt_df = Get_new_features(tt_df)
 tt_df = Get_card_group_features(tt_df,['day'],'day')
 tt_df = Get_card_group_features(tt_df,['TransactionAmt','ProductCD'],'amt',agg=False)
-tt_df = Get_card_group_features(tt_df,['card1'],'card1',encoding=['C1','C14','V257','V258'])
-tt_df = Get_card_group_features(tt_df,['card2'],'card2',encoding=['C1','C14','V257','V258'])
-tt_df = Get_card_group_features(tt_df,['card3'],'card3',encoding=['C1','C14','V257','V258'],norm=True)
+tt_df = Get_card_group_features(tt_df,['card1'],'card1')
+tt_df = Get_card_group_features(tt_df,['card2'],'card2')
+tt_df = Get_card_group_features(tt_df,['card3'],'card3',norm=True)
 tt_df = Get_card_group_features(tt_df,['card4'],'card4')
-tt_df = Get_card_group_features(tt_df,['card5'],'card5',encoding=['C1','C14','V257','V258'],norm=True)
+tt_df = Get_card_group_features(tt_df,['card5'],'card5',norm=True)
 tt_df = Get_card_group_features(tt_df,['card6'],'card6')
 tt_df = Get_card_group_features(tt_df,['card3','TransactionAmt','ProductCD'],'card3Amt',agg=False)
 tt_df = Get_card_group_features(tt_df,['card3','card5','TransactionAmt','ProductCD'],'card35Amt',agg=False)
@@ -365,17 +365,24 @@ for col in tt_df:
         tt_df[col] = tt_df[col].fillna(-999)
     else:
         tt_df[col ] = tt_df[col].fillna('-999')
-count_cols = ['day'] + v_cols
-count_label_cols = cat_cols + ['P_emaildomain_bin','P_emaildomain_suffix','R_emaildomain_bin','R_emaildomain_suffix','os','chrome','w','h','w-h','area','ratio','TF',\
+count_cols = ['day']
+count_label_cols = ['P_emaildomain_bin','P_emaildomain_suffix','R_emaildomain_bin','R_emaildomain_suffix','os','chrome','w','h','w-h','area','ratio','TF',\
         'M1-M9','nan-271100-176639','nan-346252-235004','nan-446307-364784','nan-449555-369714','nan-449562-369913','nan-585371-501629']
-target_cols = []
-if False:
+mean_cols = card_cols + ['id_19','id_20','id_21','id_25','id_26']
+if True:
+    mean_encoding_cols = []
     tt_df = Count_encoding(tt_df,count_cols,drop=True)
+    new_cols,tt_df = Mean_encoding(tt_df,['V203'],['V127'],drop=False)
+    mean_encoding_cols.extend(new_cols)
+    new_cols,tt_df = Mean_encoding(tt_df,card_cols,['V96','V103','V159','V178','V203','V265','V293','V317'],drop=True)
+    mean_encoding_cols.extend(new_cols)
+    new_cols,tt_df = Mean_encoding(tt_df,['id_19','id_20','id_21','id_25','id_26','id_33','DeviceInfo'],['id_02'],drop=True)
+    mean_encoding_cols.extend(new_cols)
+    count_label_cols = list(set(count_label_cols)-set(card_cols+['id_19','id_20','id_21','id_25','id_26','id_33','DeviceInfo']))
     tt_df = Count_label_encoding(tt_df,count_label_cols)
-    #tt_df = Target_encoding(tt_df,target_cols,trainNrows=train_nrows,sparseThreshold=0)
-    tt_df[:train_nrows][[id_name]+['%sCount'%col for col in count_cols]+count_label_cols+target_cols].to_csv('%s/data/encodingTrain.csv'%root,index=False)
-    tt_df[train_nrows:][[id_name]+['%sCount'%col for col in count_cols]+count_label_cols+target_cols].to_csv('%s/data/encodingTest.csv'%root,index=False)
-    tt_df.drop(['%sCount'%col for col in count_cols]+count_label_cols+target_cols,axis=1,inplace=True)
+    tt_df[:train_nrows][[id_name]+['%sCount'%col for col in count_cols]+count_label_cols+mean_encoding_cols].to_csv('%s/data/encodingTrain.csv'%root,index=False)
+    tt_df[train_nrows:][[id_name]+['%sCount'%col for col in count_cols]+count_label_cols+mean_encoding_cols].to_csv('%s/data/encodingTest.csv'%root,index=False)
+    tt_df.drop(['%sCount'%col for col in count_cols]+count_label_cols+mean_encoding_cols,axis=1,inplace=True)
 else:
     tt_df.drop(count_cols+count_label_cols+target_cols,axis=1,inplace=True)
 drop_cols = ['TransactionDT_%s'%t for t in TransactionDT_interval]
