@@ -150,14 +150,15 @@ def Target_encoding(df,cols,trainNrows,sparseThreshold=50):
     df.drop(['tmp'],axis=1,inplace=True)
     return df
 
-def Mean_encoding(df,encodingCol,cols,drop=True):
+def Mean_encoding(df,encodingCols,cols,drop=True):
     encoding_cols = []
-    for col in cols:
-        print('mean encoding:',col)
-        encoding_cols.append('%s_%sMean'%(encodingCol,col2))
-        df['%s_%sMean'%(encodingCol,col2)] = df[[encodingCol,col]].groupby([encodingCol])[col].transform('mean')
+    for encoding_col in encodingCols:
+        for col in cols:
+            print('mean encoding %s by %s'%(encoding_col,col))
+            encoding_cols.append('%s_%sMean'%(encoding_col,col))
+            df['%s_%sMean'%(encoding_col,col)] = df[[encoding_col,col]].groupby([encoding_col])[col].transform('mean')
     if drop:
-        df.drop([encodingCol],axis=1,inplace=True)
+        df.drop(encodingCols,axis=1,inplace=True)
     return encoding_cols,df
 
 def Get_list_ave_interval(x):

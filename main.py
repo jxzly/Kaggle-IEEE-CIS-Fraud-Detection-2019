@@ -41,7 +41,6 @@ def Lgb_folds_pred(nSplits=5,catFeatures=[],swapTargetFrac=0.0,seed=42):
           'bagging_fraction': 0.4181193142567742,
           'min_data_in_leaf': 106,
           'objective': 'binary',
-          'metric':'auc',
           'max_depth': -1,
           'learning_rate': 0.006883242363721497,
           "boosting_type": "gbdt",
@@ -114,9 +113,10 @@ for prefix in ['uniqueCrad','encoding']:#,'valueCount'
 tt_df = train_df.append(test_df)
 drop_cols = ['V%sCount'%(i+1) for i in range(339)]#['TransactionDT_600', 'TransactionDT_1800', 'TransactionDT_3600', 'TransactionDT_7200', 'TransactionDT_18000','nan-449562-369913.1'] + [col for col in train_df.columns if 'CumTarget' in col]#['day_V%sDivMean'%(i+1) for i in range(339)] + ['C11DivC%s'%(i+1) for i in range(10)]
 #print(drop_cols)
-tt_df = tt_df.drop(drop_cols,axis=1)
+#tt_df = tt_df.drop(drop_cols,axis=1)
 cols = [col for col in tt_df.columns if 'TranDist' in col]
 tt_df = Count_label_encoding(tt_df,cols)
+tt_df['V258DelV257'] = tt_df['V258'] - tt_df['V257']
 train_df = tt_df[:train_df.shape[0]]
 test_df = tt_df[train_df.shape[0]:]
 '''
