@@ -123,7 +123,7 @@ def Count_encoding(df,cols,sparseThreshold=50):
 def Count_encoding(df,cols,drop=True):
     for col in cols:
         print('count encoding:',col)
-        df['%sCount'%col] = df[col].map(dict(df[col].value_counts())).astype(int)
+        df['%sCount'%col] = df[col].map(dict(df[col].value_counts()))
     if drop:
         df.drop(cols,axis=1,inplace=True)
     return df
@@ -157,6 +157,28 @@ def Mean_encoding(df,encodingCols,cols,drop=True):
             print('mean encoding %s by %s'%(encoding_col,col))
             encoding_cols.append('%s_%sMean'%(encoding_col,col))
             df['%s_%sMean'%(encoding_col,col)] = df[[encoding_col,col]].groupby([encoding_col])[col].transform('mean')
+    if drop:
+        df.drop(encodingCols,axis=1,inplace=True)
+    return encoding_cols,df
+
+def Std_encoding(df,encodingCols,cols,drop=True):
+    encoding_cols = []
+    for encoding_col in encodingCols:
+        for col in cols:
+            print('std encoding %s by %s'%(encoding_col,col))
+            encoding_cols.append('%s_%sMean'%(encoding_col,col))
+            df['%s_%sStd'%(encoding_col,col)] = df[[encoding_col,col]].groupby([encoding_col])[col].transform('std')
+    if drop:
+        df.drop(encodingCols,axis=1,inplace=True)
+    return encoding_cols,df
+
+def Skew_encoding(df,encodingCols,cols,drop=True):
+    encoding_cols = []
+    for encoding_col in encodingCols:
+        for col in cols:
+            print('skew encoding %s by %s'%(encoding_col,col))
+            encoding_cols.append('%s_%sMean'%(encoding_col,col))
+            df['%s_%sSkew'%(encoding_col,col)] = df[[encoding_col,col]].groupby([encoding_col])[col].transform('skew')
     if drop:
         df.drop(encodingCols,axis=1,inplace=True)
     return encoding_cols,df

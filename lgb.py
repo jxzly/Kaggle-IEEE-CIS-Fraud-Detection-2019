@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import copy
 import matplotlib.pyplot as plt
-from sklearn.model_selection import KFold,StratifiedKFold
+from sklearn.model_selection import KFold,StratifiedKFold,GroupKFold
 from tqdm import tqdm
 from utils import *
 
@@ -23,8 +23,12 @@ class Model():
         self.swap_target_frac = swapTargetFrac
         self.seed = seed
 
-    def Train(self,trainDf,testDf,catFeatures,prefix=''):
-        skf = KFold(n_splits=self.n_splits, shuffle=False, random_state=self.seed)
+    def Train(self,trainDf,testDf,catFeatures,groups=None,prefix=''):
+        if groups is None:
+            skf = KFold(n_splits=self.n_splits, shuffle=False, random_state=self.seed)
+        #skf = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=42)
+        else:
+            skf = GroupKFold(n_splits=self.n_splits)
         train_cols = [col for col in trainDf.columns if col not in [id_name,label_name]]
         log = open('%s/log/train.log'%root,'w')
         Write_log(log,str(train_cols))
@@ -35,8 +39,10 @@ class Model():
         feature_importance_df = pd.DataFrame()
         train_pred = []
         train_target = []
+        all_valid_metric = []
         y_mean = np.mean(trainDf[label_name])
-        for fold, (train_index, val_index) in enumerate(skf.split(trainDf,trainDf[label_name])):
+        for fold, (train_index, val_index) in enumerate(skf.split(trainDf,trainDf[label_name],groups)):
+
             train_y = copy.deepcopy(trainDf.loc[train_index,label_name].values)
             if self.swap_target_frac > 0.0:
                 random_index = [np.random.randint(0,len(train_y)-1) for k in range(len(train_y))]
@@ -74,24 +80,25 @@ class Model():
             Write_log(log,'fold %s\n'%fold)
             for i in range(len(evals_result_dic['valid_1'][self.params['metric']])//self.verbose):
                 Write_log(log,' - %i round - train_metric: %.6f - val_metric: %.6f\n'%(i*self.verbose,evals_result_dic['training'][self.params['metric']][i*self.verbose],evals_result_dic['valid_1'][self.params['metric']][i*self.verbose]))
-            Write_log(log,'valid metric: %.8f\n'%Metric(trainDf.loc[val_index,label_name],val_pred))
+            all_valid_metric.append(Metric(trainDf.loc[val_index,label_name],val_pred))
+            Write_log(log,'valid metric: %.8f\n'%all_valid_metric[-1])
             plt.plot(evals_result_dic['valid_1'][self.params['metric']],label='fold%s'%(fold))
         train_metric = Metric(train_target,train_pred)
-        print('all train metric:%.8f'%(train_metric))
+        print('all train oof metric:%.8f'%(train_metric))
         valid_metric = Metric(trainDf[label_name],valid_df[label_name])
-        print('all valid metric:%.8f'%(valid_metric))
-        real_metric = valid_metric + 0.0*(valid_metric-train_metric)
-        print('real metric:%.8f'%(real_metric))
+        print('all valid oof metric:%.8f'%(valid_metric))
+        mean_valid_metric = np.mean(all_valid_metric)
+        print('all valid mean metric:%.8f'%(mean_valid_metric))
         feature_importance_df = feature_importance_df.groupby(['feature_name']).mean().reset_index()
         feature_importance_df = feature_importance_df.sort_values(by=['importance_gain'],ascending=False)
         #feature_importance_df = pd.merge(feature_importance_df,colsDf,how='left',on='feature_name')
-        feature_importance_df.to_csv('%s/valid/feature_importance_%slgb_metric_%.8f_%.8f_%.8f.csv'%(root,prefix,real_metric,valid_metric,train_metric),index=False)
-        valid_df.to_csv('%s/valid/valid_%slgb_metric_%.8f_%.8f_%.8f.csv'%(root,prefix,real_metric,valid_metric,train_metric),index=False)
+        feature_importance_df.to_csv('%s/valid/feature_importance_%slgb_metric_%.8f_%.8f_%.8f.csv'%(root,prefix,mean_valid_metric,valid_metric,train_metric),index=False)
+        valid_df.to_csv('%s/valid/valid_%slgb_metric_%.8f_%.8f_%.8f.csv'%(root,prefix,mean_valid_metric,valid_metric,train_metric),index=False)
         plt.legend()
-        plt.savefig('%s/log/valid_%slgb_metric_%.8f_%.8f_%.8f.png'%(root,prefix,real_metric,valid_metric,train_metric))
+        plt.savefig('%s/log/valid_%slgb_metric_%.8f_%.8f_%.8f.png'%(root,prefix,mean_valid_metric,valid_metric,train_metric))
         plt.close('all')
         submission_df[label_name] = submission_df[[col for col in submission_df.columns if col != id_name]].mean(axis=1)
-        submission_df[[id_name,label_name]].to_csv('%s/submission/submission_%slgb_metric_%.8f_%.8f_%.8f.csv'%(root,prefix,real_metric,valid_metric,train_metric),index=False)
+        submission_df[[id_name,label_name]].to_csv('%s/submission/submission_%slgb_metric_%.8f_%.8f_%.8f.csv'%(root,prefix,mean_valid_metric,valid_metric,train_metric),index=False)
         log.close()
-        os.rename('%s/log/train.log'%root, '%s/log/%slgb_metric_%.8f_%.8f_%.8f.log'%(root,prefix,real_metric,valid_metric,train_metric))
+        os.rename('%s/log/train.log'%root, '%s/log/%slgb_metric_%.8f_%.8f_%.8f.log'%(root,prefix,mean_valid_metric,valid_metric,train_metric))
         return None

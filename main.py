@@ -3,16 +3,18 @@ import pandas as pd
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.filterwarnings('ignore')
-import sys,os
+import sys,os,re
 from sklearn.model_selection import KFold,StratifiedKFold
 from utils import *
+if False:
+    import data
 
 conf = Conf()
 root = conf.root
 id_name = conf.id_name
 label_name = conf.label_name
 
-def Lgb_folds_pred(nSplits=5,catFeatures=[],swapTargetFrac=0.0,seed=42):
+def Lgb_folds_pred(nSplits=5,catFeatures=[],groups=None,swapTargetFrac=0.0,seed=42):
     import lgb
     random_state= seed
     lgb_params1 = {
@@ -35,7 +37,7 @@ def Lgb_folds_pred(nSplits=5,catFeatures=[],swapTargetFrac=0.0,seed=42):
                   'verbosity' : 1,
                   'seed': random_state
     }
-    lgb_params = {'num_leaves': 491,
+    lgb_params = {'num_leaves': 333,
           'min_child_weight': 0.03454472573214212,
           'feature_fraction': 0.3797454081646243,
           'bagging_fraction': 0.4181193142567742,
@@ -67,28 +69,26 @@ def Lgb_folds_pred(nSplits=5,catFeatures=[],swapTargetFrac=0.0,seed=42):
                     'seed': 0,
                 }
     model = lgb.Model(params=lgb_params,rounds=4000,earlyStoppingRounds=200,verbose=100,nSplits=nSplits,swapTargetFrac=swapTargetFrac,seed=seed)
-    model.Train(trainDf=train_df,testDf=test_df,catFeatures=catFeatures,prefix='')
+    model.Train(trainDf=train_df,testDf=test_df,catFeatures=catFeatures,groups=groups,prefix='')
     return None
 
 def Cab_folds_pred(nSplits=5,catFeatures=[],swapTargetFrac=0.0,seed=42):
     import cab
     random_state = seed
     cab_params = {
-                  'objective' : 'Logloss',
-                  'eval_metric' : 'F1',
-                  'num_boost_round': 3000,
-                  'max_depth' : 11,
-                  'num_leaves' : 63,
-                  'learning_rate' : 0.05,
-                  #'subsample' : 0.7,
-                  #'colsample_bylevel' : 0.8,
-                  'min_data_in_leaf': 80,
-                  'l2_leaf_reg' : 1,
-                  'task_type':'GPU',
-                  'verbose' : True,
-                  'random_seed': random_state
-    }
-    model = cab.Model(params=cab_params,earlyStoppingRounds=200,verbose=100,nSplits=nSplits,swapTargetFrac=swapTargetFrac,seed=seed)
+                'n_estimators':5000,
+                'learning_rate': 0.04,
+                'eval_metric':'AUC',
+                'loss_function':'Logloss',
+                'num_leaves': 333,
+                'min_data_in_leaf': 106,
+                'random_seed':seed,
+                'od_wait':500,
+                'task_type':'GPU',
+                'depth': 8,
+                #'colsample_bylevel':0.7,
+                }
+    model = cab.Model(params=cab_params,earlyStoppingRounds=500,verbose=500,nSplits=nSplits,swapTargetFrac=swapTargetFrac,seed=seed)
     model.Train(trainDf=train_df,testDf=test_df,catFeatures=catFeatures,prefix='')
     return None
 
@@ -101,30 +101,28 @@ m_cols = ['M%s'%(i+1) for i in range(9)]
 v_cols = ['V%s'%(i+1) for i in range(339)]
 id_cols = ['id_%s'%str(i+1).zfill(2) for i in range(38)]
 device_cols = ['DeviceType','DeviceInfo']
+train_k = 1
 nrows=None
-train_df = pd.read_csv('%s/data/new_train.csv'%root,nrows=nrows)
-test_df = pd.read_csv('%s/data/new_test.csv'%root,nrows=nrows)
-for prefix in ['uniqueCrad','encoding']:#,'valueCount'
-    sub_train_df = pd.read_csv('%s/data/%sTrain.csv'%(root,prefix),nrows=nrows)
-    sub_test_df = pd.read_csv('%s/data/%sTest.csv'%(root,prefix),nrows=nrows)
+train_df = pd.read_csv('%s/data/new_train_k=%s.csv'%(root,train_k),nrows=nrows)
+test_df = pd.read_csv('%s/data/new_test_k=%s.csv'%(root,train_k),nrows=nrows)
+
+
+
+for prefix in ['encoding']:#,'valueCount'
+    sub_train_df = pd.read_csv('%s/data/%sTrain_k=%s.csv'%(root,prefix,train_k),nrows=nrows)
+    sub_test_df = pd.read_csv('%s/data/%sTest_k=%s.csv'%(root,prefix,train_k),nrows=nrows)
     train_df = train_df.merge(sub_train_df,how='left',on=id_name)
     test_df = test_df.merge(sub_test_df,how='left',on=id_name)
     del sub_train_df,sub_test_df
-tt_df = train_df.append(test_df)
-drop_cols = ['V%sCount'%(i+1) for i in range(339)]#['TransactionDT_600', 'TransactionDT_1800', 'TransactionDT_3600', 'TransactionDT_7200', 'TransactionDT_18000','nan-449562-369913.1'] + [col for col in train_df.columns if 'CumTarget' in col]#['day_V%sDivMean'%(i+1) for i in range(339)] + ['C11DivC%s'%(i+1) for i in range(10)]
-#print(drop_cols)
-#tt_df = tt_df.drop(drop_cols,axis=1)
-cols = [col for col in tt_df.columns if 'TranDist' in col]
-tt_df = Count_label_encoding(tt_df,cols)
-tt_df['V258DelV257'] = tt_df['V258'] - tt_df['V257']
-train_df = tt_df[:train_df.shape[0]]
-test_df = tt_df[train_df.shape[0]:]
-'''
-v_train_df = pd.read_csv('%s/data/train_transaction.csv'%root,nrows=nrows)
-v_test_df = pd.read_csv('%s/data/test_transaction.csv'%root,nrows=nrows)
-train_df = train_df.merge(v_train_df[[id_name]+v_cols],how='left',on=id_name)
-test_df = test_df.merge(v_test_df[[id_name]+v_cols],how='left',on=id_name)
-'''
-del tt_df
-Lgb_folds_pred()
-#Cab_folds_pred(catFeatures=cat_cols)
+
+cat_features = ['uniqueCard2_V258Mean']
+for col in cat_features:
+    train_df[col] = train_df[col].astype(str)
+    test_df[col] = test_df[col].astype(str)
+if False:
+    tmp = pd.read_csv('%s/data/train_transaction.csv'%root,usecols=['TransactionDT','D1'],nrows=nrows)
+    groups = ((tmp['TransactionDT'] // 86400) - tmp['D1']).fillna(-999).values
+    Lgb_folds_pred(groups=groups)
+else:
+    #Lgb_folds_pred()
+    Cab_folds_pred(catFeatures=cat_features)
