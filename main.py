@@ -15,7 +15,6 @@ random_seed = conf.random_seed
 
 def Lgb_folds_pred(nSplits=5,catFeatures=[],groups=None):
     import lgb
-    random_state= seed
     lgb_params = {'num_leaves': 333,
           'min_child_weight': 0.03454472573214212,
           'feature_fraction': 0.3797454081646243,
@@ -33,13 +32,13 @@ def Lgb_folds_pred(nSplits=5,catFeatures=[],groups=None):
           'random_state': 47
          }
     model = lgb.Model(params=lgb_params,rounds=4000,earlyStoppingRounds=200,verbose=100,nSplits=nSplits,seed=random_seed)
-    model.Train(trainDf=train_df,testDf=test_df,catFeatures=catFeatures,groups=groups,prefix='train_k>%s_'%train_k)
+    model.Train(trainDf=train_df,testDf=test_df,catFeatures=catFeatures,groups=groups,prefix='k_gt_%s_'%train_k)
     return None
 
 for train_k in [-1,0,1]:
     nrows=None
-    train_df = pd.read_csv('%s/data/new_train_k>%s.csv'%(root,train_k),nrows=nrows)
-    test_df = pd.read_csv('%s/data/new_test_k>%s.csv'%(root,train_k),nrows=nrows)
+    train_df = pd.read_csv('%s/data/new_train_k_gt_%s.csv'%(root,train_k),nrows=nrows)
+    test_df = pd.read_csv('%s/data/new_test_k_gt_%s.csv'%(root,train_k),nrows=nrows)
     for prefix in ['encoding']:
         sub_train_df = pd.read_csv('%s/data/%sTrain.csv'%(root,prefix),nrows=nrows)
         sub_test_df = pd.read_csv('%s/data/%sTest.csv'%(root,prefix),nrows=nrows)

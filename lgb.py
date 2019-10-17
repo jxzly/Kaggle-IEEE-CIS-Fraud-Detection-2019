@@ -25,7 +25,7 @@ class Model():
             os.mkdir('%s/model/modelLgb/'%root)
             os.mkdir('%s/model/modelLgb/tmp/'%root)
 
-    def Train(self,trainDf,testDf,catFeatures=[],groups=None,preifx=''):
+    def Train(self,trainDf,testDf,catFeatures=[],groups=None,prefix=''):
         if groups is None:
             skf = KFold(n_splits=self.n_splits, shuffle=False, random_state=self.seed)
         else:
